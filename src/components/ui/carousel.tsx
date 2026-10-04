@@ -93,11 +93,19 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
+    // Sync the scroll buttons once embla hands us an instance. Deferring to a
+    // microtask keeps the state update out of the effect body (it runs as a
+    // callback instead of cascading a render synchronously during commit).
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) onSelect(api)
+    })
     api.on("reInit", onSelect)
     api.on("select", onSelect)
 
     return () => {
+      cancelled = true
+      api?.off("reInit", onSelect)
       api?.off("select", onSelect)
     }
   }, [api, onSelect])

@@ -1,6 +1,6 @@
 import { Check, Circle, Dot, Loader2 } from "lucide-react";
 import type { ComplaintStatus } from "@/lib/campus";
-import { STATUSES, statusLabel } from "@/lib/campus";
+import { STATUSES } from "@/lib/campus";
 import { formatDateTime, timeAgo } from "@/lib/format";
 
 export interface HistoryEntry {

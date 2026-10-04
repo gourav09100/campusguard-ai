@@ -57,7 +57,6 @@ export default function ReportProblem() {
   const [floor, setFloor] = useState("");
   const [room, setRoom] = useState("");
   const [priorityMode, setPriorityMode] = useState<"auto" | Priority>("auto");
-  const [manualPriority, setManualPriority] = useState<Priority>("medium");
   const [photos, setPhotos] = useState<UploadPhoto[]>([]);
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
@@ -92,7 +91,7 @@ export default function ReportProblem() {
   );
 
   const effectivePriority: Priority =
-    priorityMode === "auto" ? analysis.priority : manualPriority;
+    priorityMode === "auto" ? analysis.priority : priorityMode;
   const duplicateCount = dupCheck?.count ?? 0;
 
   function captureGps() {

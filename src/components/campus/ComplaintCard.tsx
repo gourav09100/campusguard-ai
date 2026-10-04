@@ -2,7 +2,7 @@ import { ChevronRight, Clock, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { formatLocation, prioritySlaHours } from "@/lib/campus";
+import { formatLocation, isOverdue } from "@/lib/campus";
 import { timeAgo } from "@/lib/format";
 import { CategoryIcon, PriorityBadge, StatusBadge } from "./Badges";
 
@@ -19,7 +19,7 @@ export function ComplaintCard({
 }) {
   const overdue =
     complaint.status !== "resolved" &&
-    Date.now() - complaint.createdAt > prioritySlaHours(complaint.priority) * 3600_000;
+    isOverdue(complaint.createdAt, complaint.resolvedAt, complaint.priority);
 
   const body = (
     <div className="glass lift group flex w-full items-start gap-3 rounded-2xl p-3.5 text-left">

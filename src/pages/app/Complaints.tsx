@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES, PRIORITIES, STATUSES, prioritySlaHours } from "@/lib/campus";
+import { CATEGORIES, PRIORITIES, STATUSES, isOverdue } from "@/lib/campus";
 import { computeStats, type ComplaintLike } from "@/lib/stats";
 import { initials } from "@/lib/format";
 
@@ -68,7 +68,7 @@ function ComplaintsInner() {
           !(
             c.priority === "critical" ||
             (c.status !== "resolved" &&
-              Date.now() - c.createdAt > prioritySlaHours(c.priority) * 3600_000)
+              isOverdue(c.createdAt, c.resolvedAt, c.priority))
           )
         ) {
           return false;
@@ -123,7 +123,7 @@ function ComplaintsInner() {
         (c) =>
           c.priority === "critical" ||
           (c.status !== "resolved" &&
-            Date.now() - c.createdAt > prioritySlaHours(c.priority) * 3600_000),
+            isOverdue(c.createdAt, c.resolvedAt, c.priority)),
       ).length,
     },
     {

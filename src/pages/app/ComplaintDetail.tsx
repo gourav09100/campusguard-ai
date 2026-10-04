@@ -17,7 +17,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -792,6 +792,13 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
               ))}
             </SelectContent>
           </Select>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Optional note — used when assigning or changing status"
+            rows={2}
+            className="bg-white/70"
+          />
           <Button
             className="w-full"
             disabled={busy || !department}

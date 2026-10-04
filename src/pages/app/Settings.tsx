@@ -29,15 +29,13 @@ export default function Settings() {
   const navigate = useNavigate();
   const updatePrefs = useMutation(api.profile.updatePrefs);
 
-  const [prefs, setPrefs] = useState<Prefs>(user?.prefs ?? DEFAULT_PREFS);
+  // Preferences are server state — Convex pushes updates reactively, so no
+  // local copy (and no effect that copies props into state).
+  const prefs: Prefs = user?.prefs ?? DEFAULT_PREFS;
   const [solidMode, setSolidMode] = useState(
     () => localStorage.getItem("cg-surface") === "solid",
   );
   const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    if (user?.prefs) setPrefs(user.prefs);
-  }, [user?.prefs]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("solid-surfaces", solidMode);
@@ -45,7 +43,6 @@ export default function Settings() {
   }, [solidMode]);
 
   async function savePrefs(next: Prefs) {
-    setPrefs(next);
     try {
       await updatePrefs(next);
       toast.success("Preferences saved");

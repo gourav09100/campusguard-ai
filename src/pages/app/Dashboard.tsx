@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import {
   Activity,
   AlertOctagon,
@@ -21,12 +22,13 @@ import { Link, Navigate } from "react-router";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { ComplaintCard } from "@/components/campus/ComplaintCard";
-import { PriorityBadge, StatusBadge } from "@/components/campus/Badges";
+import { PriorityBadge } from "@/components/campus/Badges";
 import { CategoryBars, PriorityDonut, TrendChart } from "@/components/campus/Charts";
 import { EmptyState, SectionHeader, StatCard } from "@/components/campus/Cards";
 import { useAuth } from "@/hooks/use-auth";
 import { byCategory, byDepartment, computeStats, hotspots, monthlyTrend, type ComplaintLike } from "@/lib/stats";
-import { durationHuman, timeAgo } from "@/lib/format";
+import { isOverdue } from "@/lib/campus";
+import { durationHuman } from "@/lib/format";
 import {
   AnnouncementPanel,
   BadgesPanel,
@@ -40,6 +42,12 @@ import {
 } from "./dashboard/Shared";
 
 type Role = "student" | "teacher" | "admin";
+
+type PublicComplaintRows = FunctionReturnType<typeof api.complaints.listPublic>;
+type AnnouncementRows = FunctionReturnType<typeof api.announcements.list>;
+type NotificationRows = FunctionReturnType<typeof api.notifications.list>;
+type AlertRows = FunctionReturnType<typeof api.emergency.activeAlerts>;
+type LeaderboardRows = FunctionReturnType<typeof api.profile.leaderboard>;
 
 function DashboardSkeleton() {
   return (
@@ -72,11 +80,11 @@ function StudentView({
 }: {
   user: Doc<"users">;
   complaints: Doc<"complaints">[];
-  publicRows: any[];
-  announcements: any[];
-  notifications: any[];
-  alerts: any[];
-  leaderboard: any[];
+  publicRows: PublicComplaintRows;
+  announcements: AnnouncementRows;
+  notifications: NotificationRows;
+  alerts: AlertRows;
+  leaderboard: LeaderboardRows;
 }) {
   const stats = computeStats(complaints);
   const recent = [...complaints]
@@ -307,9 +315,9 @@ function StaffView({
 }: {
   user: Doc<"users">;
   complaints: Doc<"complaints">[];
-  publicRows: any[];
-  announcements: any[];
-  notifications: any[];
+  publicRows: PublicComplaintRows;
+  announcements: AnnouncementRows;
+  notifications: NotificationRows;
 }) {
   const stats = computeStats(complaints);
   const open = complaints.filter((c) => c.status !== "resolved");
@@ -471,10 +479,10 @@ function AdminView({
   alerts,
 }: {
   complaints: Doc<"complaints">[];
-  publicRows: any[];
-  announcements: any[];
-  notifications: any[];
-  alerts: any[];
+  publicRows: PublicComplaintRows;
+  announcements: AnnouncementRows;
+  notifications: NotificationRows;
+  alerts: AlertRows;
 }) {
   const stats = computeStats(complaints);
   const trend = useMemo(() => monthlyTrend(complaints as ComplaintLike[], 6), [complaints]);
@@ -494,8 +502,7 @@ function AdminView({
     .filter(
       (c) =>
         c.status !== "resolved" &&
-        (c.priority === "critical" ||
-          Date.now() - c.createdAt > 36 * 3600_000),
+        (c.priority === "critical" || isOverdue(c.createdAt, c.resolvedAt, c.priority)),
     )
     .sort((a, b) => a.createdAt - b.createdAt)
     .slice(0, 5);

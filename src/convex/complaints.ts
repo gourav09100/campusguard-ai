@@ -911,7 +911,7 @@ export const merge = mutation({
 export const remove = mutation({
   args: { complaintId: v.id("complaints") },
   handler: async (ctx, args) => {
-    const { user } = await requireAdmin(ctx);
+    await requireAdmin(ctx);
     const c = await loadComplaint(ctx, args.complaintId);
     const historyRows = await ctx.db
       .query("statusHistory")
