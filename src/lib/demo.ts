@@ -36,7 +36,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
       profileId: "NMU2023CS1042",
       department: "Computer Science",
       year: "3rd Year",
-      hostel: "HR2 Hostel",
+      hostel: "Boys Hostel · HR2",
       room: "C-312",
       phone: "+91 98100 11223",
       demo: true,

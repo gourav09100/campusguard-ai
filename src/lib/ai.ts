@@ -326,7 +326,7 @@ export function assistantReply(
   if (has("status", "track", "where is my", "update on")) {
     const recent = ctx.recentComplaints ?? [];
     if (recent.length === 0) {
-      return `Hi ${name} — you don't have any complaints logged yet. Head to **Report Problem** in the sidebar and describe the issue with a photo; I'll analyse it and give you a tracking ID like CG-2026-001245.`;
+      return `Hi ${name} — you don't have any complaints logged yet. Head to **Report Problem** in the sidebar and describe the issue with a photo; I'll analyse it and give you a tracking ID like CG-2026-0001.`;
     }
     const lines = recent
       .slice(0, 3)
@@ -339,11 +339,11 @@ export function assistantReply(
   }
 
   if (has("leak", "leaking", "water", "plumbing", "shortage")) {
-    return `To report a water leakage:\n1. Open **Report Problem** in the sidebar.\n2. Pick category **Water Leakage** (or Water Shortage / Plumbing).\n3. Set the location: Hostel/Building → Block → Floor → Room — e.g. HR2 Hostel · Block C · 3rd Floor.\n4. Capture a photo with your camera so the plumbing team can see the exact spot.\n5. Submit — AI assigns a priority (a continuous ceiling leak usually comes back as **High**) and routes it to **Plumbing & Water Works**.`;
+    return `To report a water leakage:\n1. Open **Report Problem** in the sidebar.\n2. Pick category **Water Leakage** (or Water Shortage / Plumbing).\n3. Set the location: Building → Block → Floor → Room — e.g. Boys Hostel · HR2 · 3rd Floor.\n4. Capture a photo with your camera so the plumbing team can see the exact spot.\n5. Submit — AI assigns a priority (a continuous ceiling leak usually comes back as **High**) and routes it to **Plumbing & Water Works**.`;
   }
 
   if (has("hostel", "room", "mess water")) {
-    return `Hostel problems go through the same **Report Problem** form — choose the **Hostel** or **Mess / Food** category, select your hostel (e.g. HR2 Hostel), block, floor and room. Hostel Maintenance gets it instantly, and your warden is notified. You can also check live issues on the **Campus Map** before reporting to avoid duplicates.`;
+    return `Hostel problems go through the same **Report Problem** form — choose the **Hostel** or **Mess / Food** category, then pick your building and block (e.g. Boys Hostel → HR2), the floor (floors start at **1st Floor**) and your room. Hostel Maintenance gets it instantly, and your warden is notified. You can also check live issues on the **Campus Map** before reporting to avoid duplicates.`;
   }
 
   if (has("electrical", "electricity", "power", "shock", "spark", "fan", "light")) {

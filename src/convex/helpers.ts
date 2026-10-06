@@ -92,22 +92,50 @@ export async function notifyUsers(
   }
 }
 
-/** Generate the next complaint code: CG-2026-001245 */
+/** Generate the next complaint code: CG-2026-0001.
+ *  Codes are unique and permanently associated with their complaint —
+ *  a code is only handed out once no complaint already uses it. */
 export async function nextComplaintCode(ctx: MutationCtx): Promise<string> {
+  const year = new Date().getFullYear();
+  const fmt = (n: number) => `CG-${year}-${String(n).padStart(4, "0")}`;
   const counter = await ctx.db
     .query("counters")
     .withIndex("by_key", (q) => q.eq("key", "root"))
     .first();
-  const year = new Date().getFullYear();
+
+  let counterId: Id<"counters">;
+  let n: number;
   if (!counter) {
-    await ctx.db.insert("counters", {
+    counterId = await ctx.db.insert("counters", {
       key: "root",
-      nextComplaint: 1246,
+      nextComplaint: 2,
       seeded: false,
+      codeFormat: "v2",
     });
-    return `CG-${year}-001245`;
+    n = 1;
+  } else if (counter.codeFormat !== "v2") {
+    // One-time migration: legacy codes were 6-digit (CG-2026-001245). New
+    // 4-digit codes can never collide with those legacy strings.
+    counterId = counter._id;
+    await ctx.db.patch(counterId, { codeFormat: "v2", nextComplaint: 2 });
+    n = 1;
+  } else {
+    counterId = counter._id;
+    n = counter.nextComplaint ?? 1;
+    await ctx.db.patch(counterId, { nextComplaint: n + 1 });
   }
-  const n = counter.nextComplaint ?? 1245;
-  await ctx.db.patch(counter._id, { nextComplaint: n + 1 });
-  return `CG-${year}-${String(n).padStart(6, "0")}`;
+
+  // Belt-and-braces: never reuse a code that already exists.
+  let code = fmt(n);
+  while (
+    await ctx.db
+      .query("complaints")
+      .withIndex("by_complaint_id", (q) => q.eq("complaintId", code))
+      .first()
+  ) {
+    n += 1;
+    await ctx.db.patch(counterId, { nextComplaint: n + 1 });
+    code = fmt(n);
+  }
+  return code;
 }

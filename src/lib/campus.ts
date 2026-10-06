@@ -240,8 +240,12 @@ export const LOCATIONS: {
   x: number;
   y: number;
 }[] = [
-  { name: "HR2 Hostel", kind: "hostel", area: "Hostel Zone — North", description: "Boys hostel, 4 blocks, 3 floors", x: 24, y: 26 },
-  { name: "HR1 Hostel", kind: "hostel", area: "Hostel Zone — North", description: "Girls hostel, 3 blocks, 3 floors", x: 24, y: 62 },
+  { name: "Boys Hostel", kind: "hostel", area: "Hostel Zone — North", description: "Boys hostel — HR1 (4 floors) and HR2 (8 floors)", x: 24, y: 26 },
+  { name: "Girls Hostel", kind: "hostel", area: "Hostel Zone — North", description: "Girls hostel residence — 6 floors", x: 24, y: 62 },
+  { name: "Atrium Building", kind: "academic", area: "Academic Zone — Centre", description: "Open atrium, studios and offices — 5 floors", x: 38, y: 54 },
+  { name: "Galaria Building", kind: "academic", area: "Student Zone", description: "Galleries and exhibition spaces — 5 floors", x: 62, y: 64 },
+  { name: "Lecture Hall Complex", kind: "academic", area: "Academic Zone — East", description: "Lecture theatres and tutorial rooms — 6 floors", x: 70, y: 40 },
+  { name: "Indoor Stadium", kind: "facility", area: "East Ground", description: "Indoor courts and arena — no floors", x: 90, y: 64 },
   { name: "Academic Block", kind: "academic", area: "Academic Zone — Centre", description: "Classrooms, faculty offices, seminar halls", x: 52, y: 40 },
   { name: "Library", kind: "academic", area: "Academic Zone — Centre", description: "Central library, reading halls, digital lab", x: 68, y: 24 },
   { name: "Laboratory Block", kind: "academic", area: "Academic Zone — East", description: "CS, Electronics, Mechanical & Chemistry labs", x: 78, y: 52 },
@@ -251,6 +255,123 @@ export const LOCATIONS: {
   { name: "Sports Complex", kind: "facility", area: "East Ground", description: "Gym, courts, stadium and swimming pool", x: 86, y: 78 },
   { name: "Water Tank Area", kind: "utility", area: "Utility Zone", description: "Overhead tanks and pump room", x: 12, y: 46 },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Floor structure                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Floor numbering ALWAYS starts at 1st Floor. CampusGuard has no 0th floor
+ * and never shows a "ground floor" label anywhere in the application.
+ */
+export interface BuildingFloorPlan {
+  /** Buildings split into blocks (e.g. Boys Hostel HR1 / HR2), each with its own floor count. */
+  blocks?: { name: string; floors: number }[];
+  /** Total floors for buildings without blocks — 0 means the location has no floors at all. */
+  floors?: number;
+}
+
+/** Exact floor structure of every campus location. */
+export const FLOOR_PLANS: Record<string, BuildingFloorPlan> = {
+  "Boys Hostel": {
+    blocks: [
+      { name: "HR1", floors: 4 },
+      { name: "HR2", floors: 8 },
+    ],
+  },
+  "Girls Hostel": { floors: 6 },
+  "Atrium Building": { floors: 5 },
+  "Galaria Building": { floors: 5 },
+  "Lecture Hall Complex": { floors: 6 },
+  "Indoor Stadium": { floors: 0 },
+  "Academic Block": { floors: 4 },
+  Library: { floors: 3 },
+  "Laboratory Block": { floors: 3 },
+  "Medical Centre": { floors: 2 },
+  "Sports Complex": { floors: 2 },
+  "Food Court": { floors: 1 },
+  "Main Gate": { floors: 1 },
+  "Water Tank Area": { floors: 1 },
+};
+
+/** Ordinal floor label: 1 → "1st Floor", 2 → "2nd Floor", … (never a ground-floor label). */
+export function ordinalFloor(n: number): string {
+  const rem100 = n % 100;
+  const rem10 = n % 10;
+  const suffix =
+    rem100 >= 11 && rem100 <= 13
+      ? "th"
+      : rem10 === 1
+        ? "st"
+        : rem10 === 2
+          ? "nd"
+          : rem10 === 3
+            ? "rd"
+            : "th";
+  return `${n}${suffix} Floor`;
+}
+
+export function floorPlanFor(building: string): BuildingFloorPlan | undefined {
+  return FLOOR_PLANS[building];
+}
+
+/** Block options for a building (only Boys Hostel has blocks: HR1 / HR2). */
+export function blocksFor(building: string): string[] {
+  return floorPlanFor(building)?.blocks?.map((b) => b.name) ?? [];
+}
+
+/**
+ * Valid floor options for a building (+block), starting at 1st Floor.
+ * Returns [] for locations with no floors (Indoor Stadium) and for block
+ * buildings before a block has been chosen.
+ */
+export function floorOptionsFor(building: string, block?: string | null): string[] {
+  const plan = floorPlanFor(building);
+  if (!plan) return [];
+  let count: number;
+  if (plan.blocks) {
+    if (!block) return [];
+    count = plan.blocks.find((b) => b.name === block)?.floors ?? 0;
+  } else {
+    count = plan.floors ?? 0;
+  }
+  if (count < 1) return [];
+  return Array.from({ length: count }, (_, i) => ordinalFloor(i + 1));
+}
+
+/**
+ * Shared frontend/backend location validation for complaint creation.
+ * Returns an error message, or null when the building/block/floor combination
+ * is valid. Invalid combos (HR1 → 5th Floor, HR2 → 9th Floor, Girls → 7th,
+ * Atrium → 6th, Galaria → 6th, Lecture → 7th, Indoor Stadium + any floor,
+ * and any ground-floor value) are always rejected.
+ */
+export function validateCampusLocation(args: {
+  building: string;
+  block?: string | null;
+  floor?: string | null;
+}): string | null {
+  const building = args.building?.trim();
+  const block = args.block?.trim() || undefined;
+  const floor = args.floor?.trim() || undefined;
+  const plan = floorPlanFor(building);
+  if (!plan) return "Please choose a valid campus location.";
+  if (plan.blocks) {
+    if (!block) return `Please choose a block for ${building}.`;
+    if (!plan.blocks.some((b) => b.name === block)) {
+      return `${block} is not a valid block of ${building}.`;
+    }
+  }
+  const options = floorOptionsFor(building, block);
+  if (options.length === 0) {
+    if (floor) return `${building} has no floors — the location is stored without a floor.`;
+    return null;
+  }
+  if (floor && !options.includes(floor)) {
+    return `Invalid floor for ${building}${block ? ` · ${block}` : ""}. Valid floors: ${options[0]} to ${options[options.length - 1]}.`;
+  }
+  return null;
+}
 
 export const CAMPUS_NAME = "North Metropolitan University";
 export const CAMPUS_SHORT = "NMU";
@@ -317,4 +438,20 @@ export function isOverdue(
 ): boolean {
   if (resolvedAt) return false;
   return now - createdAt > prioritySlaHours(priority) * 3600_000;
+}
+
+/**
+ * Cutoff timestamp for the complaint board date filter
+ * ("today" / "7" / "30" day presets). Returns null when the range is "all".
+ */
+export function dateFilterCutoff(range: string, now = Date.now()): number | null {
+  if (range === "all") return null;
+  if (range === "today") {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
+  const days = Number(range);
+  if (!Number.isFinite(days) || days <= 0) return null;
+  return now - days * 86_400_000;
 }

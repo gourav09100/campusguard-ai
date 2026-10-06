@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { PRIORITIES } from "../lib/campus";
+import { PRIORITIES, validateCampusLocation } from "../lib/campus";
 import { detectDuplicates, type ExistingComplaint } from "../lib/ai";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -321,6 +321,17 @@ export const create = mutation({
     }
     if (args.photos.length > 6) throw new Error("Maximum 6 photos allowed");
 
+    // Location rules — floors start at 1st Floor, invalid building/block/floor
+    // combinations (and any ground-floor value) can never be stored.
+    const block = args.block?.trim() || undefined;
+    const floor = args.floor?.trim() || undefined;
+    const locationError = validateCampusLocation({
+      building: args.building,
+      block,
+      floor,
+    });
+    if (locationError) throw new Error(locationError);
+
     const now = Date.now();
     const complaintId = await nextComplaintCode(ctx);
 
@@ -362,8 +373,8 @@ export const create = mutation({
       status: "submitted",
       campus: args.campus,
       building: args.building,
-      block: args.block,
-      floor: args.floor,
+      block,
+      floor,
       room: args.room,
       locationText: args.locationText,
       gpsLat: args.gpsLat,
@@ -527,6 +538,66 @@ export const assign = mutation({
   },
 });
 
+/** Staff accepts an assignment — claims the complaint and moves it In Progress. */
+export const accept = mutation({
+  args: { complaintId: v.id("complaints") },
+  handler: async (ctx, args) => {
+    const { userId, user } = await requireUser(ctx);
+    if (user.role !== "admin" && user.role !== "teacher") {
+      throw new Error("Staff access required");
+    }
+    const c = await loadComplaint(ctx, args.complaintId);
+    if (c.status === "resolved") throw new Error("Complaint already resolved");
+    if (c.status !== "assigned") {
+      throw new Error("Only assigned complaints can be accepted");
+    }
+    if (c.assignedTo && c.assignedTo !== userId && user.role !== "admin") {
+      throw new Error("This complaint is assigned to another staff member");
+    }
+    const now = Date.now();
+    const staffName = user.name ?? "Staff";
+    await ctx.db.patch(args.complaintId, {
+      status: "in_progress",
+      assignedTo: c.assignedTo ?? userId,
+      assignedToName: c.assignedToName ?? staffName,
+      updatedAt: now,
+    });
+    await addHistory(
+      ctx,
+      args.complaintId,
+      "in_progress",
+      `Assignment accepted by ${staffName} — work started on site`,
+      staffName,
+      user.role ?? "teacher",
+    );
+    await notify(ctx, {
+      userId: c.reporterId,
+      title: `${c.complaintId} is now in progress`,
+      body: `${staffName} accepted the assignment and started work on "${c.title}".`,
+      type: "status",
+      complaintId: c._id,
+      complaintCode: c.complaintId,
+      link: `/app/complaints/${c._id}`,
+    });
+    if (user.role === "teacher") {
+      await notifyUsers(
+        ctx,
+        ["admin"],
+        () => true,
+        {
+          title: `${c.complaintId} accepted by ${staffName}`,
+          body: "The assignment was accepted and is now in progress.",
+          type: "status",
+          complaintId: c._id,
+          complaintCode: c.complaintId,
+          link: `/app/complaints/${c._id}`,
+        },
+      );
+    }
+    return c._id;
+  },
+});
+
 /** Status change with an update note (staff / admin). */
 export const updateStatus = mutation({
   args: {
@@ -564,6 +635,33 @@ export const updateStatus = mutation({
       complaintCode: c.complaintId,
       link: `/app/complaints/${c._id}`,
     });
+    // Keep the assigned staff member and admins in sync with the timeline.
+    if (c.assignedTo && c.assignedTo !== user._id) {
+      await notify(ctx, {
+        userId: c.assignedTo,
+        title: `${c.complaintId} is now ${args.status.replace("_", " ")}`,
+        body: args.note.trim() || "The complaint status was updated.",
+        type: "status",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
+    if (user.role === "teacher") {
+      await notifyUsers(
+        ctx,
+        ["admin"],
+        () => true,
+        {
+          title: `${c.complaintId} · ${args.status.replace("_", " ")}`,
+          body: args.note.trim() || `Status updated by ${user.name ?? "staff"}.`,
+          type: "status",
+          complaintId: c._id,
+          complaintCode: c.complaintId,
+          link: `/app/complaints/${c._id}`,
+        },
+      );
+    }
     return c._id;
   },
 });
@@ -609,6 +707,22 @@ export const resolve = mutation({
       complaintCode: c.complaintId,
       link: `/app/complaints/${c._id}`,
     });
+    // Admins follow every resolution they did not perform themselves.
+    if (user.role !== "admin") {
+      await notifyUsers(
+        ctx,
+        ["admin"],
+        () => true,
+        {
+          title: `${c.complaintId} resolved by ${user.name ?? "staff"}`,
+          body: args.note.trim() || `Resolution proof uploaded for "${c.title}".`,
+          type: "resolved",
+          complaintId: c._id,
+          complaintCode: c.complaintId,
+          link: `/app/complaints/${c._id}`,
+        },
+      );
+    }
 
     // Reward the reporter once a report is verified as fixed.
     const pts = PRIORITIES.find((p) => p.id === c.priority)?.points ?? 10;
@@ -663,6 +777,29 @@ export const reopen = mutation({
       user.name ?? "User",
       user.role ?? "student",
     );
+    // Reporter + assigned staff learn about the reopen; admins are notified below.
+    if (c.reporterId !== userId) {
+      await notify(ctx, {
+        userId: c.reporterId,
+        title: `${c.complaintId} reopened`,
+        body: args.reason.trim() || "Your complaint was reopened for review.",
+        type: "reopened",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
+    if (c.assignedTo && c.assignedTo !== userId) {
+      await notify(ctx, {
+        userId: c.assignedTo,
+        title: `${c.complaintId} reopened`,
+        body: args.reason.trim() || "The complaint was reopened and needs attention again.",
+        type: "reopened",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
     await notifyUsers(
       ctx,
       ["admin"],
@@ -704,6 +841,29 @@ export const escalate = mutation({
       user.name ?? "User",
       user.role ?? "student",
     );
+    // Reporter + assigned staff get the escalation; admins are notified below.
+    if (c.reporterId !== userId) {
+      await notify(ctx, {
+        userId: c.reporterId,
+        title: `${c.complaintId} escalated to ${priority.toUpperCase()}`,
+        body: args.reason.trim() || "Your complaint was escalated for faster action.",
+        type: "status",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
+    if (c.assignedTo && c.assignedTo !== userId) {
+      await notify(ctx, {
+        userId: c.assignedTo,
+        title: `${c.complaintId} escalated to ${priority.toUpperCase()}`,
+        body: args.reason.trim() || "Priority raised — please prioritise this job.",
+        type: "status",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
     await notifyUsers(
       ctx,
       ["admin"],
@@ -739,6 +899,29 @@ export const setPriority = mutation({
       user.name ?? "Admin",
       "admin",
     );
+    // Priority changes notify the student and the assigned staff member.
+    if (c.reporterId !== user._id) {
+      await notify(ctx, {
+        userId: c.reporterId,
+        title: `${c.complaintId} priority changed`,
+        body: `Priority is now ${args.priority.toUpperCase()} — "${c.title}".`,
+        type: "status",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
+    if (c.assignedTo && c.assignedTo !== user._id) {
+      await notify(ctx, {
+        userId: c.assignedTo,
+        title: `${c.complaintId} priority changed`,
+        body: `Priority is now ${args.priority.toUpperCase()} — "${c.title}".`,
+        type: "status",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
     return c._id;
   },
 });
@@ -782,6 +965,22 @@ export const addComment = mutation({
         complaintCode: c.complaintId,
         link: `/app/complaints/${c._id}`,
       });
+    }
+    // Admins see work notes added by staff on any complaint.
+    if (args.kind !== "comment" && user.role === "teacher") {
+      await notifyUsers(
+        ctx,
+        ["admin"],
+        () => true,
+        {
+          title: `Work note on ${c.complaintId}`,
+          body: body.length > 140 ? `${body.slice(0, 137)}…` : body,
+          type: "status",
+          complaintId: c._id,
+          complaintCode: c.complaintId,
+          link: `/app/complaints/${c._id}`,
+        },
+      );
     }
     return c._id;
   },

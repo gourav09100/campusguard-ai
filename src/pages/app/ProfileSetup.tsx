@@ -184,7 +184,7 @@ export default function ProfileSetup() {
                   <>
                     <div className="space-y-1.5">
                       <Label htmlFor="hostel">Hostel / Building</Label>
-                      <Input id="hostel" name="hostel" placeholder="e.g. HR2 Hostel" />
+                      <Input id="hostel" name="hostel" placeholder="e.g. Boys Hostel · HR2" />
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="room">Room</Label>

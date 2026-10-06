@@ -96,7 +96,7 @@ const schema = defineSchema(
     }).index("email", ["email"]),
 
     complaints: defineTable({
-      complaintId: v.string(), // CG-2026-001245
+      complaintId: v.string(), // CG-2026-0001 (unique, permanent)
       title: v.string(),
       description: v.string(),
       category: v.string(),
@@ -270,6 +270,12 @@ const schema = defineSchema(
       key: v.string(),
       nextComplaint: v.optional(v.number()),
       seeded: v.optional(v.boolean()),
+      /** complaint code style — "v2" = CG-2026-0001 format */
+      codeFormat: v.optional(v.string()),
+      /** one-time legacy floor/location data normalization has run */
+      floorDataNormalized: v.optional(v.boolean()),
+      /** version of the legacy-location scrub that has been applied */
+      floorDataNormVersion: v.optional(v.number()),
     }).index("by_key", ["key"]),
   },
   {

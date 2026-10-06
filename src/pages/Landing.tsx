@@ -227,9 +227,9 @@ export default function Landing() {
 
               <ul className="mt-3 space-y-2">
                 {[
-                  { id: "CG-2026-001245", t: "Water leaking from HR2 3rd floor ceiling", p: "HIGH", s: "In Progress", pc: "bg-orange-500/15 text-orange-700", sc: "bg-blue-500/15 text-blue-700" },
-                  { id: "CG-2026-001244", t: "Library Wi-Fi dropping every few minutes", p: "MEDIUM", s: "Assigned", pc: "bg-amber-500/15 text-amber-700", sc: "bg-cyan-500/15 text-cyan-700" },
-                  { id: "CG-2026-001243", t: "Unauthorised person at Main Gate", p: "CRITICAL", s: "Under Review", pc: "bg-rose-500/15 text-rose-700", sc: "bg-amber-500/15 text-amber-700" },
+                  { id: "CG-2026-0142", t: "Water leaking from HR2 3rd floor ceiling", p: "HIGH", s: "In Progress", pc: "bg-orange-500/15 text-orange-700", sc: "bg-blue-500/15 text-blue-700" },
+                  { id: "CG-2026-0141", t: "Library Wi-Fi dropping every few minutes", p: "MEDIUM", s: "Assigned", pc: "bg-amber-500/15 text-amber-700", sc: "bg-cyan-500/15 text-cyan-700" },
+                  { id: "CG-2026-0140", t: "Unauthorised person at Main Gate", p: "CRITICAL", s: "Under Review", pc: "bg-rose-500/15 text-rose-700", sc: "bg-amber-500/15 text-amber-700" },
                 ].map((c) => (
                   <li key={c.id} className="glass-soft flex items-center gap-3 rounded-xl p-2.5">
                     <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/80 text-sky-700">

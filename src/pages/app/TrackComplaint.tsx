@@ -26,7 +26,7 @@ export default function TrackComplaint() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Enter your tracking ID (for example{" "}
-          <span className="font-mono font-bold text-foreground">CG-2026-001245</span>) to see the
+          <span className="font-mono font-bold text-foreground">CG-2026-0001</span>) to see the
           live timeline, updates and resolution proof.
         </p>
 
@@ -42,7 +42,7 @@ export default function TrackComplaint() {
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="CG-2026-001245"
+              placeholder="CG-2026-0001"
               className="pl-9 font-mono uppercase bg-white/70"
             />
           </div>
@@ -67,7 +67,7 @@ export default function TrackComplaint() {
             <EmptyState
               icon={<FileSearch className="size-5" />}
               title="No complaint with that ID"
-              description="Double-check the code from your submission screen or notification — it looks like CG-2026-001245."
+              description="Double-check the code from your submission screen or notification — it looks like CG-2026-0001."
             />
           ) : (
             <ComplaintCard complaint={found} to={`/app/complaints/${found._id}`} showReporter />

@@ -1,10 +1,12 @@
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import {
   CATEGORIES,
   DEPARTMENTS,
   LOCATIONS,
+  floorOptionsFor,
+  floorPlanFor,
   type ComplaintStatus,
   type Priority,
 } from "../lib/campus";
@@ -77,12 +79,12 @@ const DAY = 24 * 3600_000;
 /* ------------------------------------------------------------------ */
 
 const DEMO_STUDENTS = [
-  { name: "Aarav Mehta", email: "aarav.student@campusguard.app", profileId: "NMU2023CS1042", department: "Computer Science", year: "3rd Year", hostel: "HR2 Hostel", room: "C-312", phone: "+91 98100 11223" },
-  { name: "Sneha Iyer", email: "sneha.student@campusguard.app", profileId: "NMU2024EC0871", department: "Electronics", year: "2nd Year", hostel: "HR1 Hostel", room: "B-204", phone: "+91 98100 22334" },
-  { name: "Kabir Singh", email: "kabir.student@campusguard.app", profileId: "NMU2022ME0455", department: "Mechanical", year: "4th Year", hostel: "HR2 Hostel", room: "A-118", phone: "+91 98100 33445" },
-  { name: "Diya Nair", email: "diya.student@campusguard.app", profileId: "NMU2023CE0612", department: "Civil", year: "3rd Year", hostel: "HR1 Hostel", room: "D-401", phone: "+91 98100 44556" },
-  { name: "Rohan Das", email: "rohan.student@campusguard.app", profileId: "NMU2024CS0998", department: "Computer Science", year: "2nd Year", hostel: "HR2 Hostel", room: "B-227", phone: "+91 98100 55667" },
-  { name: "Meera Joshi", email: "meera.student@campusguard.app", profileId: "NMU2025MB0117", department: "Management", year: "1st Year", hostel: "HR1 Hostel", room: "A-106", phone: "+91 98100 66778" },
+  { name: "Aarav Mehta", email: "aarav.student@campusguard.app", profileId: "NMU2023CS1042", department: "Computer Science", year: "3rd Year", hostel: "Boys Hostel · HR2", room: "C-312", phone: "+91 98100 11223" },
+  { name: "Sneha Iyer", email: "sneha.student@campusguard.app", profileId: "NMU2024EC0871", department: "Electronics", year: "2nd Year", hostel: "Boys Hostel · HR1", room: "B-204", phone: "+91 98100 22334" },
+  { name: "Kabir Singh", email: "kabir.student@campusguard.app", profileId: "NMU2022ME0455", department: "Mechanical", year: "4th Year", hostel: "Boys Hostel · HR2", room: "A-118", phone: "+91 98100 33445" },
+  { name: "Diya Nair", email: "diya.student@campusguard.app", profileId: "NMU2023CE0612", department: "Civil", year: "3rd Year", hostel: "Boys Hostel · HR1", room: "D-401", phone: "+91 98100 44556" },
+  { name: "Rohan Das", email: "rohan.student@campusguard.app", profileId: "NMU2024CS0998", department: "Computer Science", year: "2nd Year", hostel: "Boys Hostel · HR2", room: "B-227", phone: "+91 98100 55667" },
+  { name: "Meera Joshi", email: "meera.student@campusguard.app", profileId: "NMU2025MB0117", department: "Management", year: "1st Year", hostel: "Boys Hostel · HR1", room: "A-106", phone: "+91 98100 66778" },
 ];
 
 const DEMO_STAFF = [
@@ -132,10 +134,10 @@ const DETAILED: ComplaintSpec[] = [
     subCategory: "Ceiling leakage",
     priority: "high",
     status: "in_progress",
-    building: "HR2 Hostel",
-    block: "Block C",
+    building: "Boys Hostel",
+    block: "HR2",
     floor: "3rd Floor",
-    room: "Room 312 / Corridor",
+    room: "Block C · Room 312 / Corridor",
     ageDays: 4,
     reporterIndex: 0,
     assignedDepartment: "Plumbing & Water Works",
@@ -176,16 +178,16 @@ const DETAILED: ComplaintSpec[] = [
     photos: true,
   },
   {
-    title: "Power cut in HR1 Block B since early morning",
+    title: "Power cut in HR1 since early morning",
     description:
-      "Entire Block B of HR1 Hostel has had no electricity since 5 AM. Washroom lights, charging points and water pump are all dead. Nearly 90 students affected.",
+      "The entire HR1 block of Boys Hostel has had no electricity since 5 AM. Washroom lights, charging points and water pump are all dead. Nearly 90 students affected.",
     category: "electricity",
     subCategory: "Power cut",
     priority: "high",
     status: "submitted",
-    building: "HR1 Hostel",
-    block: "Block B",
-    floor: "All floors",
+    building: "Boys Hostel",
+    block: "HR1",
+    room: "Block B",
     ageDays: 0,
     reporterIndex: 1,
     assignedDepartment: "Electrical Maintenance",
@@ -194,15 +196,15 @@ const DETAILED: ComplaintSpec[] = [
   {
     title: "Washroom on HR2 second floor very unclean",
     description:
-      "The common washroom on HR2 Block A second floor has not been cleaned since yesterday. Bad smell, no cleaning water and one tap is broken. It is used by 40+ students.",
+      "The common washroom on the HR2 second floor of Boys Hostel has not been cleaned since yesterday. Bad smell, no cleaning water and one tap is broken. It is used by 40+ students.",
     category: "washroom",
     subCategory: "Unclean",
     priority: "high",
     status: "in_progress",
-    building: "HR2 Hostel",
-    block: "Block A",
+    building: "Boys Hostel",
+    block: "HR2",
     floor: "2nd Floor",
-    room: "Common Washroom",
+    room: "Common Washroom · Block A",
     ageDays: 3,
     reporterIndex: 4,
     assignedDepartment: "Sanitation & Hygiene",
@@ -270,24 +272,24 @@ const GENERATED_TEMPLATES: Omit<
   ComplaintSpec,
   "ageDays" | "reporterIndex" | "status"
 >[] = [
-  { title: "Damp patch spreading on HR2 Block B ceiling", description: "A damp patch on the Block B ceiling of HR2 is spreading and paint is flaking off above the study desk.", category: "water_leakage", subCategory: "Wall seepage", priority: "high", building: "HR2 Hostel", block: "Block B", floor: "2nd Floor", room: "Room 218", assignedDepartment: "Plumbing & Water Works", assignedToName: "M. Das" },
-  { title: "Common washroom not cleaned since morning", description: "The ground floor common washroom of HR1 Block A has not been cleaned since morning and there is no cleaning water.", category: "cleanliness", subCategory: "Sweeping", priority: "medium", building: "HR1 Hostel", block: "Block A", floor: "Ground Floor", assignedDepartment: "Sanitation & Hygiene" },
+  { title: "Damp patch spreading on HR2 Block B ceiling", description: "A damp patch on the Block B ceiling of HR2 is spreading and paint is flaking off above the study desk.", category: "water_leakage", subCategory: "Wall seepage", priority: "high", building: "Boys Hostel", block: "HR2", floor: "2nd Floor", room: "Block B · Room 218", assignedDepartment: "Plumbing & Water Works", assignedToName: "M. Das" },
+  { title: "Common washroom not cleaned since morning", description: "The first floor common washroom of HR1 (Boys Hostel) has not been cleaned since morning and there is no cleaning water.", category: "cleanliness", subCategory: "Sweeping", priority: "medium", building: "Boys Hostel", block: "HR1", floor: "1st Floor", room: "Block A washroom", assignedDepartment: "Sanitation & Hygiene" },
   { title: "Wi-Fi keeps dropping in the reading hall", description: "Wi-Fi in reading hall drops randomly, especially near the window desks. Online exams are getting interrupted.", category: "wifi", subCategory: "Dropped connection", priority: "medium", building: "Library", floor: "1st Floor", room: "Reading Hall A", assignedDepartment: "IT & Network Services", assignedToName: "I. Qureshi" },
   { title: "Projector bulb dim in seminar hall", description: "The projector in the seminar hall is very dim and the last row cannot read slides.", category: "classroom", subCategory: "Projector", priority: "low", building: "Academic Block", floor: "3rd Floor", room: "Seminar Hall", assignedDepartment: "General Maintenance" },
-  { title: "Low water pressure on the second floor", description: "Water pressure on the second floor is very low in the mornings; buckets take forever to fill.", category: "water_shortage", subCategory: "Low pressure", priority: "medium", building: "HR2 Hostel", block: "Block A", floor: "2nd Floor", assignedDepartment: "Plumbing & Water Works" },
+  { title: "Low water pressure on the second floor", description: "Water pressure on the second floor is very low in the mornings; buckets take forever to fill.", category: "water_shortage", subCategory: "Low pressure", priority: "medium", building: "Boys Hostel", block: "HR2", floor: "2nd Floor", assignedDepartment: "Plumbing & Water Works" },
   { title: "Street light dead near the water tank path", description: "The street light on the path to the water tank has been dead for three nights making the walk unsafe.", category: "road_infra", subCategory: "Street light", priority: "high", building: "Water Tank Area", assignedDepartment: "Electrical Maintenance" },
   { title: "Scooters blocking the fire lane", description: "Two-wheelers are parked across the fire lane next to the Food Court making it impossible for an ambulance to pass.", category: "parking", subCategory: "Two wheeler", priority: "medium", building: "Food Court", assignedDepartment: "Campus Security" },
   { title: "Power socket sparking at lab workstation 7", description: "The power socket at lab workstation 7 sparks when a laptop charger is plugged in. It smells burnt.", category: "electricity", subCategory: "Short circuit", priority: "critical", building: "Laboratory Block", floor: "2nd Floor", room: "CS Lab 2", assignedDepartment: "Electrical Maintenance", assignedToName: "S. Iyer" },
   { title: "Mess served stale chapatis yesterday", description: "Chapatis at dinner yesterday smelled stale and several students skipped the meal. Please review food quality checks.", category: "mess_food", subCategory: "Food quality", priority: "high", building: "Food Court", room: "Mess Hall", assignedDepartment: "Mess & Catering", assignedToName: "K. Bose" },
   { title: "Pothole growing on the main driveway", description: "A pothole near the main gate driveway has grown after the rain and two-wheelers are skidding on it.", category: "road_infra", subCategory: "Pothole", priority: "medium", building: "Main Gate", assignedDepartment: "General Maintenance" },
-  { title: "Blocked drain behind HR1 washing area", description: "The drain behind the HR1 washing area is blocked and dirty water is standing since two days.", category: "plumbing", subCategory: "Blocked drain", priority: "high", building: "HR1 Hostel", block: "Block C", assignedDepartment: "Plumbing & Water Works" },
-  { title: "Unknown person loitering near HR1 at night", description: "An unknown person was seen loitering near the HR1 gate past midnight asking students for phone numbers.", category: "security", subCategory: "Suspicious person", priority: "critical", building: "HR1 Hostel", assignedDepartment: "Campus Security", assignedToName: "D. Rathore" },
-  { title: "Broken window pane in room 204", description: "The window pane in room 204 is cracked and sharp glass is exposed. Wind breaks it further.", category: "hostel", subCategory: "Room repair", priority: "low", building: "HR2 Hostel", block: "Block A", floor: "2nd Floor", room: "Room 204", assignedDepartment: "General Maintenance" },
-  { title: "First aid kit in the lab is empty", description: "During a small cut injury today we found the lab first aid kit completely empty — no bandages or antiseptic.", category: "medical", subCategory: "First aid", priority: "high", building: "Laboratory Block", floor: "Ground Floor", room: "CS Lab 1", assignedDepartment: "Health & Wellness", assignedToName: "Dr. S. Menon" },
+  { title: "Blocked drain behind HR1 washing area", description: "The drain behind the HR1 washing area is blocked and dirty water is standing since two days.", category: "plumbing", subCategory: "Blocked drain", priority: "high", building: "Boys Hostel", block: "HR1", room: "Washing area", assignedDepartment: "Plumbing & Water Works" },
+  { title: "Unknown person loitering near HR1 at night", description: "An unknown person was seen loitering near the HR1 gate past midnight asking students for phone numbers.", category: "security", subCategory: "Suspicious person", priority: "critical", building: "Boys Hostel", block: "HR1", assignedDepartment: "Campus Security", assignedToName: "D. Rathore" },
+  { title: "Broken window pane in room 204", description: "The window pane in room 204 is cracked and sharp glass is exposed. Wind breaks it further.", category: "hostel", subCategory: "Room repair", priority: "low", building: "Boys Hostel", block: "HR2", floor: "2nd Floor", room: "Block A · Room 204", assignedDepartment: "General Maintenance" },
+  { title: "First aid kit in the lab is empty", description: "During a small cut injury today we found the lab first aid kit completely empty — no bandages or antiseptic.", category: "medical", subCategory: "First aid", priority: "high", building: "Laboratory Block", floor: "1st Floor", room: "CS Lab 1", assignedDepartment: "Health & Wellness", assignedToName: "Dr. S. Menon" },
   { title: "CCTV camera not recording at the side gate", description: "The CCTV dome above the side gate shows no feed on the control room monitor since last week.", category: "security", subCategory: "Surveillance", priority: "high", building: "Main Gate", assignedDepartment: "Campus Security", assignedToName: "D. Rathore" },
   { title: "Lab machines fail to boot in CS Lab 3", description: "Eight machines in CS Lab 3 hang on the boot screen, wasting the first twenty minutes of every practical.", category: "laboratory", subCategory: "Equipment", priority: "medium", building: "Laboratory Block", floor: "3rd Floor", room: "CS Lab 3", assignedDepartment: "IT & Network Services" },
   { title: "Broken chair in the tutorial room", description: "One chair in the tutorial room has a broken leg and collapses when someone sits.", category: "furniture", subCategory: "Broken chair", priority: "low", building: "Academic Block", floor: "1st Floor", room: "Tutorial Room 12", assignedDepartment: "General Maintenance" },
-  { title: "Toilet seat broken in Block C washroom", description: "A toilet seat is broken in the Block C washroom and the cubicle is out of order.", category: "washroom", subCategory: "Broken fitting", priority: "medium", building: "HR2 Hostel", block: "Block C", floor: "1st Floor", assignedDepartment: "Sanitation & Hygiene" },
+  { title: "Toilet seat broken in Block C washroom", description: "A toilet seat is broken in the Block C washroom and the cubicle is out of order.", category: "washroom", subCategory: "Broken fitting", priority: "medium", building: "Boys Hostel", block: "HR2", floor: "1st Floor", room: "Block C washroom", assignedDepartment: "Sanitation & Hygiene" },
 ];
 
 const HISTORY_NOTES: Record<ComplaintStatus, string> = {
@@ -312,12 +314,114 @@ async function ensureDepartmentsAndLocations(ctx: MutationCtx) {
       await ctx.db.insert("departments", { ...d, createdAt: Date.now() });
     }
   }
+  // Upsert the canonical campus locations and drop legacy entries that are no
+  // longer part of the corrected campus structure (e.g. "HR1 Hostel").
   const existingLocs = await ctx.db.query("locations").collect();
-  if (existingLocs.length === 0) {
-    for (const l of LOCATIONS) {
+  const byName = new Map(existingLocs.map((l) => [l.name, l]));
+  const canonical = new Set(LOCATIONS.map((l) => l.name));
+  for (const l of LOCATIONS) {
+    const row = byName.get(l.name);
+    if (!row) {
       await ctx.db.insert("locations", { ...l, createdAt: Date.now() });
+    } else if (
+      row.kind !== l.kind ||
+      row.area !== l.area ||
+      row.description !== l.description ||
+      row.x !== l.x ||
+      row.y !== l.y
+    ) {
+      await ctx.db.patch(row._id, {
+        kind: l.kind,
+        area: l.area,
+        description: l.description,
+        x: l.x,
+        y: l.y,
+      });
     }
   }
+  for (const row of existingLocs) {
+    if (!canonical.has(row.name)) await ctx.db.delete(row._id);
+  }
+}
+
+/**
+ * One-time normalization of legacy location data (idempotent):
+ * - legacy hostel names → Boys Hostel with block HR1 / HR2 (data + free text)
+ * - a "ground floor" value → "1st Floor"; terrace / whole-building values dropped
+ * - any floor outside the building's valid range is dropped
+ */
+async function normalizeLegacyFloorData(ctx: MutationCtx, counterId: Id<"counters">) {
+  const scrubText = (s: string) =>
+    s
+      .replace(/ground\s+floor/gi, "first floor")
+      .replace(/\bHR1 Hostel\b/g, "Boys Hostel HR1")
+      .replace(/\bHR2 Hostel\b/g, "Boys Hostel HR2");
+  const complaints = await ctx.db.query("complaints").collect();
+  for (const c of complaints) {
+    const patch: Partial<Doc<"complaints">> = {};
+
+    let building = c.building;
+    let block = c.block;
+    let room = c.room;
+    let floor = c.floor;
+
+    if (building === "HR1 Hostel" || building === "HR2 Hostel") {
+      const code = building.slice(0, 3); // "HR1" / "HR2"
+      if (block && block !== code && /^block/i.test(block)) {
+        room = room ? `${block} · ${room}` : block;
+      }
+      building = "Boys Hostel";
+      block = code;
+    }
+
+    if (floor) {
+      if (/^ground\s+floor$/i.test(floor)) {
+        floor = "1st Floor";
+      } else if (!/^[1-9]\d?(st|nd|rd|th) Floor$/.test(floor)) {
+        floor = undefined;
+      }
+      if (
+        floor &&
+        floorPlanFor(building) &&
+        !floorOptionsFor(building, block).includes(floor)
+      ) {
+        floor = undefined;
+      }
+    }
+
+    const title = scrubText(c.title);
+    const description = scrubText(c.description);
+    const locationText = c.locationText ? scrubText(c.locationText) : c.locationText;
+
+    if (building !== c.building) patch.building = building;
+    if (block !== c.block) patch.block = block;
+    if (room !== c.room) patch.room = room;
+    if (floor !== c.floor) patch.floor = floor;
+    if (title !== c.title) patch.title = title;
+    if (description !== c.description) patch.description = description;
+    if (locationText !== c.locationText) patch.locationText = locationText;
+    if (c.ai) {
+      const summary = scrubText(c.ai.summary);
+      const suggestedAction = scrubText(c.ai.suggestedAction);
+      if (summary !== c.ai.summary || suggestedAction !== c.ai.suggestedAction) {
+        patch.ai = { ...c.ai, summary, suggestedAction };
+      }
+    }
+    if (c.feedback && /ground\s+floor/i.test(c.feedback.comment)) {
+      patch.feedback = { ...c.feedback, comment: scrubText(c.feedback.comment) };
+    }
+
+    if (Object.keys(patch).length > 0) await ctx.db.patch(c._id, patch);
+  }
+
+  const comments = await ctx.db.query("comments").collect();
+  for (const cm of comments) {
+    if (/ground\s+floor/i.test(cm.body)) {
+      await ctx.db.patch(cm._id, { body: scrubText(cm.body) });
+    }
+  }
+
+  await ctx.db.patch(counterId, { floorDataNormalized: true, floorDataNormVersion: 2 });
 }
 
 async function ensureDemoUsers(ctx: MutationCtx) {
@@ -542,7 +646,15 @@ export const ensureDemoData = mutation({
       .query("counters")
       .withIndex("by_key", (q) => q.eq("key", "root"))
       .first();
-    if (counter?.seeded) return { seeded: true, message: "Demo data already loaded" };
+    if (counter?.seeded) {
+      // Keep the location list in sync with the corrected campus structure and
+      // normalize any legacy floor data once — even on an already-seeded db.
+      await ensureDepartmentsAndLocations(ctx);
+      if ((counter.floorDataNormVersion ?? 0) < 2) {
+        await normalizeLegacyFloorData(ctx, counter._id);
+      }
+      return { seeded: true, message: "Demo data already loaded" };
+    }
 
     await ensureDepartmentsAndLocations(ctx);
     const { studentId } = await ensureDemoUsers(ctx);
@@ -645,7 +757,7 @@ export const ensureDemoData = mutation({
         kind: "suspicious",
         title: "Unknown vehicle circling the hostel gates",
         details: "A grey sedan circled HR1 and HR2 gates repeatedly at night. Gate camera footage shared with security.",
-        location: "HR1 / HR2 Hostel gates",
+        location: "Boys Hostel HR1 / HR2 gates",
         reporterName: "Gate Security",
         status: "resolved",
         simulated: true,
@@ -653,15 +765,18 @@ export const ensureDemoData = mutation({
       });
     }
 
+    let counterId: Id<"counters">;
     if (!counter) {
-      await ctx.db.insert("counters", {
+      counterId = await ctx.db.insert("counters", {
         key: "root",
         nextComplaint: 1300,
         seeded: true,
       });
     } else {
-      await ctx.db.patch(counter._id, { seeded: true, nextComplaint: 1300 });
+      counterId = counter._id;
+      await ctx.db.patch(counterId, { seeded: true, nextComplaint: 1300 });
     }
+    await normalizeLegacyFloorData(ctx, counterId);
 
     return { seeded: true, complaints: index - 1000 };
   },

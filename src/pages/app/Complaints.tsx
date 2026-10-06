@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES, PRIORITIES, STATUSES, isOverdue } from "@/lib/campus";
+import { CATEGORIES, PRIORITIES, STATUSES, dateFilterCutoff, isOverdue } from "@/lib/campus";
 import { computeStats, type ComplaintLike } from "@/lib/stats";
 import { initials } from "@/lib/format";
 
@@ -39,6 +39,7 @@ function ComplaintsInner() {
   const all = useQuery(api.complaints.list);
   const staff = useQuery(api.complaints.listForStaff);
   const mine = useQuery(api.complaints.listMine);
+  const users = useQuery(api.profile.listUsers);
 
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
@@ -46,6 +47,8 @@ function ComplaintsInner() {
   const [priority, setPriority] = useState("all");
   const [status, setStatus] = useState("all");
   const [building, setBuilding] = useState("all");
+  const [staffFilter, setStaffFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
 
   const complaints: Doc<"complaints">[] =
     role === "admin" ? (all ?? []) : role === "teacher" ? (staff ?? []) : (mine ?? []);
@@ -55,6 +58,11 @@ function ComplaintsInner() {
   const buildings = useMemo(
     () => [...new Set(complaints.map((c) => c.building))].sort(),
     [complaints],
+  );
+
+  const staffMembers = useMemo(
+    () => (users ?? []).filter((u) => u.role === "teacher"),
+    [users],
   );
 
   const filtered = useMemo(() => {
@@ -77,6 +85,17 @@ function ComplaintsInner() {
         if (priority !== "all" && c.priority !== priority) return false;
         if (status !== "all" && c.status !== status) return false;
         if (building !== "all" && c.building !== building) return false;
+        if (staffFilter !== "all") {
+          if (staffFilter === "unassigned") {
+            if (c.assignedTo) return false;
+          } else if (c.assignedTo !== staffFilter) {
+            return false;
+          }
+        }
+        if (dateFilter !== "all") {
+          const cutoff = dateFilterCutoff(dateFilter);
+          if (cutoff !== null && !(c.createdAt >= cutoff)) return false;
+        }
         if (
           q &&
           !(
@@ -92,7 +111,7 @@ function ComplaintsInner() {
         return true;
       })
       .sort((a, b) => b.createdAt - a.createdAt);
-  }, [complaints, tab, search, category, priority, status, building]);
+  }, [complaints, tab, search, category, priority, status, building, staffFilter, dateFilter]);
 
   const stats = computeStats(complaints as ComplaintLike[]);
 
@@ -248,6 +267,35 @@ function ComplaintsInner() {
               ))}
             </SelectContent>
           </Select>
+          {role === "admin" && (
+            <>
+              <Select value={staffFilter} onValueChange={setStaffFilter}>
+                <SelectTrigger className="bg-white/70">
+                  <SelectValue placeholder="Assigned staff" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 bg-white/95 backdrop-blur-xl">
+                  <SelectItem value="all">All staff</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {staffMembers.map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.name ?? s.email ?? "Staff"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="bg-white/70">
+                  <SelectValue placeholder="Date" />
+                </SelectTrigger>
+                <SelectContent className="bg-white/95 backdrop-blur-xl">
+                  <SelectItem value="all">Any date</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          )}
         </div>
       </div>
 

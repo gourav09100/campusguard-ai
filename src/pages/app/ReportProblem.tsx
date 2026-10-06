@@ -31,21 +31,19 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { analyzeComplaint } from "@/lib/ai";
-import { CAMPUS_NAME, CATEGORIES, PRIORITIES, type Priority } from "@/lib/campus";
-
-const FLOORS = [
-  "Ground Floor",
-  "1st Floor",
-  "2nd Floor",
-  "3rd Floor",
-  "4th Floor",
-  "Terrace / Roof",
-  "All floors",
-];
+import {
+  CAMPUS_NAME,
+  CATEGORIES,
+  LOCATIONS,
+  PRIORITIES,
+  blocksFor,
+  floorOptionsFor,
+  validateCampusLocation,
+  type Priority,
+} from "@/lib/campus";
 
 export default function ReportProblem() {
   const navigate = useNavigate();
-  const locations = useQuery(api.campus.locations);
   const create = useMutation(api.complaints.create);
 
   const [title, setTitle] = useState("");
@@ -74,6 +72,17 @@ export default function ReportProblem() {
     () => CATEGORIES.find((c) => c.id === category),
     [category],
   );
+
+  // Dependent location selectors: Building → Block → Floor.
+  // Floor options always start at "1st Floor" — there is no ground-floor
+  // option, and locations like Indoor Stadium have no floor selector at all.
+  const blockOptions = useMemo(() => blocksFor(building), [building]);
+  const floorOptions = useMemo(
+    () => floorOptionsFor(building, block),
+    [building, block],
+  );
+  const hasNoFloors =
+    building !== "" && blockOptions.length === 0 && floorOptions.length === 0;
 
   // Live AI analysis (mock provider — swap for a server action later).
   const analysis = useMemo(
@@ -122,6 +131,15 @@ export default function ReportProblem() {
       return setError("Please describe the problem in at least 15 characters.");
     if (!category) return setError("Please choose a category.");
     if (!building) return setError("Please choose the building / hostel.");
+    if (blockOptions.length > 0 && !block) {
+      return setError(`Please choose the block (${blockOptions.join(" / ")}) for ${building}.`);
+    }
+    const locationError = validateCampusLocation({
+      building,
+      block: block || undefined,
+      floor: floor || undefined,
+    });
+    if (locationError) return setError(locationError);
 
     setSubmitting(true);
     try {
@@ -177,7 +195,7 @@ export default function ReportProblem() {
             <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
               Next ID
             </p>
-            <p className="font-mono text-sm font-bold text-sky-700">CG-2026-00••••</p>
+            <p className="font-mono text-sm font-bold text-sky-700">CG-2026-••••</p>
           </div>
         </div>
       </div>
@@ -314,13 +332,20 @@ export default function ReportProblem() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Building / Hostel</Label>
-                  <Select value={building} onValueChange={setBuilding}>
+                  <Select
+                    value={building}
+                    onValueChange={(v) => {
+                      setBuilding(v);
+                      setBlock("");
+                      setFloor("");
+                    }}
+                  >
                     <SelectTrigger className="w-full bg-white/70">
                       <SelectValue placeholder="Choose building" />
                     </SelectTrigger>
                     <SelectContent className="max-h-72 bg-white/95 backdrop-blur-xl">
-                      {(locations ?? []).map((l) => (
-                        <SelectItem key={l._id} value={l.name}>
+                      {LOCATIONS.map((l) => (
+                        <SelectItem key={l.name} value={l.name}>
                           {l.name}
                         </SelectItem>
                       ))}
@@ -328,31 +353,61 @@ export default function ReportProblem() {
                   </Select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="block">Block</Label>
-                  <Input
-                    id="block"
-                    value={block}
-                    onChange={(e) => setBlock(e.target.value)}
-                    placeholder="e.g. Block C (optional)"
-                  />
-                </div>
+                {blockOptions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Block</Label>
+                    <Select
+                      value={block}
+                      onValueChange={(v) => {
+                        setBlock(v);
+                        setFloor("");
+                      }}
+                    >
+                      <SelectTrigger className="w-full bg-white/70">
+                        <SelectValue placeholder="Choose block" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white/95 backdrop-blur-xl">
+                        {blockOptions.map((b) => (
+                          <SelectItem key={b} value={b}>
+                            {b}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-                <div className="space-y-1.5">
-                  <Label>Floor</Label>
-                  <Select value={floor} onValueChange={setFloor}>
-                    <SelectTrigger className="w-full bg-white/70">
-                      <SelectValue placeholder="Choose floor" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white/95 backdrop-blur-xl">
-                      {FLOORS.map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {f}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {floorOptions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Floor</Label>
+                    <Select value={floor} onValueChange={setFloor}>
+                      <SelectTrigger className="w-full bg-white/70">
+                        <SelectValue placeholder="Choose floor" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white/95 backdrop-blur-xl">
+                        {floorOptions.map((f) => (
+                          <SelectItem key={f} value={f}>
+                            {f}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Floors start at 1st Floor · {floorOptions.length} floors available
+                      {block ? ` for ${block}` : ""}
+                    </p>
+                  </div>
+                )}
+
+                {hasNoFloors && (
+                  <div className="space-y-1.5">
+                    <Label>Floor</Label>
+                    <p className="glass-soft rounded-xl px-3 py-2.5 text-xs text-muted-foreground">
+                      {building} is stored as a single location without a floor — no floor
+                      selector needed.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <Label htmlFor="room">Room / Area</Label>
@@ -505,8 +560,8 @@ export default function ReportProblem() {
       </form>
 
       <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-        <StatusBadge status="submitted" /> Your complaint enters the workflow instantly and you
-        get a tracking ID like <span className="font-mono font-bold">CG-2026-001245</span>.
+        <        StatusBadge status="submitted" /> Your complaint enters the workflow instantly and you
+        get a permanent tracking ID like <span className="font-mono font-bold">CG-2026-0001</span>.
       </p>
     </div>
   );

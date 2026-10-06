@@ -609,6 +609,7 @@ function StudentActions({ complaint }: { complaint: Doc<"complaints"> }) {
 
 function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
   const updateStatus = useMutation(api.complaints.updateStatus);
+  const accept = useMutation(api.complaints.accept);
   const resolve = useMutation(api.complaints.resolve);
   const [note, setNote] = useState("");
   const [proof, setProof] = useState<UploadPhoto[]>([]);
@@ -621,6 +622,47 @@ function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
 
   return (
     <div className="space-y-4">
+      {complaint.status === "assigned" && (
+        <div className="glass-strong glass-edge rounded-2xl p-4">
+          <SectionHeader
+            title="New assignment"
+            subtitle={
+              complaint.assignedToName
+                ? `Assigned to ${complaint.assignedToName}`
+                : "Routed to your department"
+            }
+            icon={<UserCog className="size-4" />}
+          />
+          <p className="mb-2 text-xs text-muted-foreground">
+            Accepting claims the complaint and moves it to In Progress — the student and admins
+            are notified immediately.
+          </p>
+          <Button
+            className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 text-white hover:from-sky-600 hover:to-indigo-700"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await accept({ complaintId: complaint._id });
+                toast.success("Assignment accepted", {
+                  description: "Status moved to In Progress — the student has been notified.",
+                });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not accept assignment");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="mr-2 size-4" />
+            )}
+            Accept assignment
+          </Button>
+        </div>
+      )}
       <div className="glass rounded-2xl p-4">
         <SectionHeader title="Update status" subtitle="Staff controls" icon={<Tag className="size-4" />} />
         <div className="space-y-2">
