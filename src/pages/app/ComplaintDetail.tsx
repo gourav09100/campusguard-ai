@@ -622,7 +622,9 @@ function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
 
   return (
     <div className="space-y-4">
-      {complaint.status === "assigned" && (
+      {(complaint.status === "assigned" ||
+        complaint.status === "submitted" ||
+        complaint.status === "under_review") && (
         <div className="glass-strong glass-edge rounded-2xl p-4">
           <SectionHeader
             title="New assignment"

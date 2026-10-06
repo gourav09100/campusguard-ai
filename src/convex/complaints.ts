@@ -204,7 +204,17 @@ export const getByCode = query({
 export const history = query({
   args: { complaintId: v.id("complaints") },
   handler: async (ctx, { complaintId }) => {
-    await requireUser(ctx);
+    const { userId, user } = await requireUser(ctx);
+    const complaint = await ctx.db.get(complaintId);
+    if (!complaint) return [];
+    // Same access rule as get(): owner, staff or admin only.
+    if (
+      user.role !== "admin" &&
+      user.role !== "teacher" &&
+      complaint.reporterId !== userId
+    ) {
+      return [];
+    }
     return await ctx.db
       .query("statusHistory")
       .withIndex("by_complaint", (q) => q.eq("complaintId", complaintId))
@@ -216,12 +226,26 @@ export const history = query({
 export const comments = query({
   args: { complaintId: v.id("complaints") },
   handler: async (ctx, { complaintId }) => {
-    await requireUser(ctx);
+    const { userId, user } = await requireUser(ctx);
+    const complaint = await ctx.db.get(complaintId);
+    if (!complaint) return [];
+    // Same access rule as get(): owner, staff or admin only.
+    if (
+      user.role !== "admin" &&
+      user.role !== "teacher" &&
+      complaint.reporterId !== userId
+    ) {
+      return [];
+    }
     const rows = await ctx.db
       .query("comments")
       .withIndex("by_complaint", (q) => q.eq("complaintId", complaintId))
       .collect();
-    return rows.sort((a, b) => a.createdAt - b.createdAt);
+    // Admin-only internal notes are filtered server-side — never delivered to
+    // non-admin clients (the UI filter alone is not a privacy guarantee).
+    return rows
+      .filter((r) => user.role === "admin" || r.kind !== "internal_note")
+      .sort((a, b) => a.createdAt - b.createdAt);
   },
 });
 
@@ -384,6 +408,10 @@ export const create = mutation({
       reporterEmail: user.email ?? undefined,
       photos: args.photos,
       ai,
+      // Persist the AI routing so the complaint lands in the matching
+      // department's staff queue immediately (matches the student-facing
+      // "routed to X" notification and seeded data).
+      assignedDepartment: ai.department,
       createdAt: now,
       updatedAt: now,
       reopenedCount: 0,
@@ -548,11 +576,24 @@ export const accept = mutation({
     }
     const c = await loadComplaint(ctx, args.complaintId);
     if (c.status === "resolved") throw new Error("Complaint already resolved");
-    if (c.status !== "assigned") {
-      throw new Error("Only assigned complaints can be accepted");
+    if (c.status === "in_progress") {
+      throw new Error("This complaint is already being worked on");
     }
     if (c.assignedTo && c.assignedTo !== userId && user.role !== "admin") {
       throw new Error("This complaint is assigned to another staff member");
+    }
+    // Staff may claim open complaints explicitly assigned to them or routed to
+    // their department (AI routing happens at submission); admins can claim
+    // any open complaint.
+    const routedToMe =
+      c.assignedTo === userId ||
+      (!!c.assignedDepartment &&
+        (user.role === "admin" ||
+          c.assignedDepartment === (user.department ?? "")));
+    if (!routedToMe) {
+      throw new Error(
+        "This complaint is not routed to your department — ask an admin to assign it",
+      );
     }
     const now = Date.now();
     const staffName = user.name ?? "Staff";
