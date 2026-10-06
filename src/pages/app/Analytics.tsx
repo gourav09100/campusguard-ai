@@ -46,7 +46,12 @@ function AnalyticsInner() {
   const complaints = useQuery(api.complaints.list);
   const departments = useQuery(api.campus.departments);
 
-  const rows = (complaints ?? []) as unknown as ComplaintLike[];
+  // Memoized so the loading fallback keeps a stable identity — otherwise every
+  // derived chart below recomputes on each render while queries are in flight.
+  const rows = useMemo(
+    () => (complaints ?? []) as unknown as ComplaintLike[],
+    [complaints],
+  );
   const stats = useMemo(() => computeStats(rows), [rows]);
   const trend = useMemo(() => monthlyTrend(rows, 6), [rows]);
   const categoryRows = useMemo(

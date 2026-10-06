@@ -50,8 +50,13 @@ function ComplaintsInner() {
   const [staffFilter, setStaffFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
 
-  const complaints: Doc<"complaints">[] =
-    role === "admin" ? (all ?? []) : role === "teacher" ? (staff ?? []) : (mine ?? []);
+  // Memoized so the loading fallback keeps a stable array identity and the
+  // filters below don't recompute on every render.
+  const complaints: Doc<"complaints">[] = useMemo(
+    () =>
+      role === "admin" ? (all ?? []) : role === "teacher" ? (staff ?? []) : (mine ?? []),
+    [role, all, staff, mine],
+  );
 
   const loading = role === "admin" ? all === undefined : role === "teacher" ? staff === undefined : mine === undefined;
 
