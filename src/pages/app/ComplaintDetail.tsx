@@ -56,6 +56,7 @@ import {
   DEPARTMENT_NAMES,
   EMERGENCY_CONTACTS,
   STATUSES,
+  findCategory,
   isFinalStatus,
   isOverdue,
   prioritySlaHours,
@@ -566,7 +567,10 @@ function DetailInner() {
 function AdminAiReview({ complaint }: { complaint: Doc<"complaints"> }) {
   const updateAi = useMutation(api.complaints.updateAi);
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState(complaint.ai?.category ?? "");
+  // ai.category is stored as a label; the Select works with category ids.
+  const [category, setCategory] = useState(
+    findCategory(complaint.ai?.category ?? "")?.id ?? complaint.category,
+  );
   const [priority, setPriorityValue] = useState(
     complaint.ai?.priority ?? complaint.priority,
   );

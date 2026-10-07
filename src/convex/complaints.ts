@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { PRIORITIES, validateCampusLocation } from "../lib/campus";
+import { PRIORITIES, categoryLabel, validateCampusLocation } from "../lib/campus";
 import { detectDuplicates, type ExistingComplaint } from "../lib/ai";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -1181,7 +1181,8 @@ export const updateAi = mutation({
     const c = await loadComplaint(ctx, args.complaintId);
     const now = Date.now();
     const ai = {
-      category: args.category,
+      // ai.category is stored as the human label; complaint.category (apply) is the id.
+      category: categoryLabel(args.category),
       subCategory: args.subCategory ?? c.ai?.subCategory ?? "",
       priority: args.priority,
       department: args.department,
@@ -1207,8 +1208,8 @@ export const updateAi = mutation({
       args.complaintId,
       c.status,
       args.apply
-        ? `AI suggestion accepted and applied (${args.category} · ${args.priority.toUpperCase()} · ${args.department})`
-        : `AI suggestion updated manually (${args.category} · ${args.priority.toUpperCase()} · ${args.department})`,
+        ? `AI suggestion accepted and applied (${categoryLabel(args.category)} · ${args.priority.toUpperCase()} · ${args.department})`
+        : `AI suggestion updated manually (${categoryLabel(args.category)} · ${args.priority.toUpperCase()} · ${args.department})`,
       user.name ?? "Admin",
       "admin",
       c.status,
@@ -1217,7 +1218,7 @@ export const updateAi = mutation({
       await notify(ctx, {
         userId: c.reporterId,
         title: `${c.complaintId} reviewed`,
-        body: `Admin reviewed the AI analysis — ${args.category} · ${args.priority.toUpperCase()} priority.`,
+        body: `Admin reviewed the AI analysis — ${categoryLabel(args.category)} · ${args.priority.toUpperCase()} priority.`,
         type: "reviewed",
         complaintId: c._id,
         complaintCode: c.complaintId,

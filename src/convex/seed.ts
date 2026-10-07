@@ -769,6 +769,7 @@ export const ensureDemoData = mutation({
       "resolved",
       "resolved",
       "resolved",
+      "closed",
       "in_progress",
       "assigned",
       "under_review",

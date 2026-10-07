@@ -217,6 +217,7 @@ const NOTIF_TONE: Record<string, string> = {
   assigned: "bg-cyan-500/12 text-cyan-700",
   status: "bg-indigo-500/12 text-indigo-700",
   resolved: "bg-emerald-500/12 text-emerald-700",
+  closed: "bg-zinc-500/12 text-zinc-700",
   reopened: "bg-rose-500/12 text-rose-700",
   announcement: "bg-violet-500/12 text-violet-700",
   emergency: "bg-red-500/12 text-red-700",

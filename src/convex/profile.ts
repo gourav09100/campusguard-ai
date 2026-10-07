@@ -106,7 +106,7 @@ export const claimRole = mutation({
         }
         for (const c of pool.slice(0, 6)) {
           const type =
-            c.status === "resolved"
+            c.status === "resolved" || c.status === "closed"
               ? "resolved"
               : c.status === "assigned" || c.status === "in_progress"
                 ? "assigned"
@@ -118,7 +118,9 @@ export const claimRole = mutation({
             title: `${c.complaintId} · ${c.title}`,
             body:
               type === "resolved"
-                ? "Resolved — review the proof and rate the fix."
+                ? c.status === "closed"
+                  ? "Closed — the ticket has been archived after verification."
+                  : "Resolved — review the proof and rate the fix."
                 : `Current status: ${c.status.replace("_", " ")}. ${c.assignedDepartment ?? "Awaiting assignment"}.`,
             type,
             complaintId: c._id,
@@ -133,6 +135,7 @@ export const claimRole = mutation({
           .filter(
             (c) =>
               c.status !== "resolved" &&
+              c.status !== "closed" &&
               (c.assignedTo === userId ||
                 (!c.assignedTo && c.assignedDepartment === args.department)),
           )
@@ -152,9 +155,14 @@ export const claimRole = mutation({
 
       if (args.role === "admin" && counter?.seeded) {
         const all = await recent();
-        const open = all.filter((c) => c.status !== "resolved").length;
+        const open = all.filter(
+          (c) => c.status !== "resolved" && c.status !== "closed",
+        ).length;
         const critical = all.filter(
-          (c) => c.priority === "critical" && c.status !== "resolved",
+          (c) =>
+            c.priority === "critical" &&
+            c.status !== "resolved" &&
+            c.status !== "closed",
         ).length;
         await notify(ctx, {
           userId,

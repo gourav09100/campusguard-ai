@@ -14,7 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES, formatLocation, statusLabel } from "@/lib/campus";
+import {
+  CATEGORIES,
+  formatLocation,
+  statusLabel,
+  type ComplaintStatus,
+} from "@/lib/campus";
 import { timeAgo } from "@/lib/format";
 import { hotspots, type ComplaintLike } from "@/lib/stats";
 
@@ -25,7 +30,7 @@ type Row = {
   description: string;
   category: string;
   priority: "low" | "medium" | "high" | "critical";
-  status: "submitted" | "under_review" | "assigned" | "in_progress" | "resolved";
+  status: ComplaintStatus;
   building: string;
   block?: string | null;
   floor?: string | null;
@@ -42,7 +47,7 @@ const LEGEND = [
 ];
 
 function pinColor(row: Row): string {
-  if (row.status === "resolved") return "bg-emerald-500";
+  if (row.status === "resolved" || row.status === "closed") return "bg-emerald-500";
   return (
     {
       critical: "bg-rose-500",
