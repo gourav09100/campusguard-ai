@@ -292,12 +292,46 @@ const GENERATED_TEMPLATES: Omit<
   { title: "Toilet seat broken in Block C washroom", description: "A toilet seat is broken in the Block C washroom and the cubicle is out of order.", category: "washroom", subCategory: "Broken fitting", priority: "medium", building: "Boys Hostel", block: "HR2", floor: "1st Floor", room: "Block C washroom", assignedDepartment: "Sanitation & Hygiene" },
 ];
 
+/**
+ * Coverage demo complaints — one or two realistic reports for every hostel /
+ * building group required for the hackathon demo (HR1 & HR2 already appear in
+ * DETAILED / GENERATED_TEMPLATES). Floors follow FLOOR_PLANS exactly:
+ * Girls Hostel 1–6, Atrium 1–5, Galaria 1–5, Lecture Hall Complex 1–6,
+ * Indoor Stadium has NO floors.
+ */
+const COVERAGE: ComplaintSpec[] = [
+  // --- Girls Hostel (6 floors) ---
+  { title: "Hot water not available in Girls Hostel 4th floor", description: "Since yesterday there is no hot water on the 4th floor of the Girls Hostel. Three students have reported the same to the warden and it is getting cold at night.", category: "water_shortage", subCategory: "Hot water", priority: "high", status: "in_progress", building: "Girls Hostel", floor: "4th Floor", room: "4th floor washroom", ageDays: 3, reporterIndex: 3, assignedDepartment: "Plumbing & Water Works", assignedToName: "M. Das", photos: true },
+  { title: "Washroom door lock broken on Girls Hostel 2nd floor", description: "The lock on the second floor common washroom door is broken and the door does not close properly. It has been like this for a week.", category: "washroom", subCategory: "Broken fitting", priority: "medium", status: "assigned", building: "Girls Hostel", floor: "2nd Floor", room: "Common washroom", ageDays: 5, reporterIndex: 4, assignedDepartment: "Sanitation & Hygiene" },
+  { title: "Tube light flickering in Girls Hostel study hall", description: "The tube light above the study tables in the Girls Hostel common room flickers constantly and gives headaches during night study.", category: "fan_light", subCategory: "Flickering light", priority: "medium", status: "resolved", building: "Girls Hostel", floor: "1st Floor", room: "Study hall", ageDays: 12, reporterIndex: 5, assignedDepartment: "Electrical Maintenance", assignedToName: "S. Iyer", resolution: "Flickering tube light replaced with a new LED batten and the starter circuit checked.", feedback: { rating: 5, comment: "Light is steady now, thank you!", solved: true }, photos: true },
+
+  // --- Atrium Building (5 floors) ---
+  { title: "Fire exit door jammed on Atrium 5th floor", description: "The fire exit door on the 5th floor of the Atrium Building is jammed shut. In an emergency the entire floor would be stuck — please treat this as urgent.", category: "furniture", subCategory: "Door", priority: "critical", status: "submitted", building: "Atrium Building", floor: "5th Floor", room: "Fire exit", ageDays: 1, reporterIndex: 1, assignedDepartment: "General Maintenance", photos: true },
+  { title: "Projector not detected in Atrium 3rd floor studio", description: "The projector in the Atrium 3rd floor design studio is not detected by any laptop since the last software update. Classes are being taken on paper.", category: "classroom", subCategory: "Projector", priority: "medium", status: "under_review", building: "Atrium Building", floor: "3rd Floor", room: "Studio 3B", ageDays: 2, reporterIndex: 2, assignedDepartment: "General Maintenance" },
+  { title: "Water dispenser leaking in Atrium lobby", description: "The water dispenser on the ground floor lobby of the Atrium Building is leaking from the bottom and there is a puddle near the seating area.", category: "plumbing", subCategory: "Tap leakage", priority: "low", status: "resolved", building: "Atrium Building", floor: "1st Floor", room: "Lobby", ageDays: 20, reporterIndex: 0, assignedDepartment: "Plumbing & Water Works", assignedToName: "M. Das", resolution: "Dispenser inlet valve replaced, floor mopped and a drip tray added.", feedback: { rating: 4, comment: "Fixed quickly.", solved: true }, photos: true },
+
+  // --- Galaria Building (5 floors) ---
+  { title: "Water leakage above Galaria 2nd floor exhibit", description: "A dark damp patch has appeared on the ceiling above the student exhibit on the 2nd floor of the Galaria Building and water drips onto the display boards when it rains.", category: "water_leakage", subCategory: "Roof leakage", priority: "high", status: "in_progress", building: "Galaria Building", floor: "2nd Floor", room: "Exhibit wall", ageDays: 4, reporterIndex: 3, assignedDepartment: "Plumbing & Water Works", assignedToName: "M. Das", photos: true },
+  { title: "AC not cooling in Galaria seminar room", description: "The AC in the Galaria Building seminar room on the 3rd floor runs but only blows warm air. Sessions for 40+ students are becoming unbearable.", category: "fan_light", subCategory: "AC", priority: "high", status: "assigned", building: "Galaria Building", floor: "3rd Floor", room: "Seminar Room", ageDays: 2, reporterIndex: 4, assignedDepartment: "Electrical Maintenance", assignedToName: "S. Iyer" },
+
+  // --- Lecture Hall Complex (6 floors) ---
+  { title: "Mic dead in Lecture Hall Complex 502", description: "The lectern microphone in lecture hall LHC-502 on the 5th floor produces no sound. Students in the back rows cannot hear anything during lectures.", category: "classroom", subCategory: "Classroom equipment", priority: "high", status: "assigned", building: "Lecture Hall Complex", floor: "5th Floor", room: "LHC 502", ageDays: 2, reporterIndex: 1, assignedDepartment: "General Maintenance" },
+  { title: "Broken seating row in Lecture Hall Complex 2nd floor", description: "Row 4 of lecture hall LHC-203 on the 2nd floor has three seats with broken backs. Students have to sit on the floor during long lectures.", category: "furniture", subCategory: "Broken chair", priority: "medium", status: "submitted", building: "Lecture Hall Complex", floor: "2nd Floor", room: "LHC 203", ageDays: 1, reporterIndex: 5, assignedDepartment: "General Maintenance", photos: true },
+  { title: "AC tripping repeatedly in LHC 6th floor hall", description: "The AC in lecture hall LHC-601 on the 6th floor trips every 20 minutes and the hall heats up mid-lecture. The electrician reset it twice last week.", category: "fan_light", subCategory: "AC", priority: "high", status: "closed", building: "Lecture Hall Complex", floor: "6th Floor", room: "LHC 601", ageDays: 25, reporterIndex: 2, assignedDepartment: "Electrical Maintenance", assignedToName: "S. Iyer", resolution: "Compressor overload relay replaced and the circuit load rebalanced — no tripping since.", feedback: { rating: 5, comment: "Cool and quiet through three lectures now.", solved: true }, photos: true },
+
+  // --- Indoor Stadium (no floors) ---
+  { title: "Wiring sparking above Indoor Stadium court 1", description: "Exposed wiring above badminton court 1 in the Indoor Stadium is sparking when the floodlights are switched on. Players are being asked to avoid that court.", category: "electricity", subCategory: "Short circuit", priority: "critical", status: "assigned", building: "Indoor Stadium", room: "Court 1", ageDays: 1, reporterIndex: 0, assignedDepartment: "Electrical Maintenance", assignedToName: "S. Iyer", photos: true },
+  { title: "Rusted net posts on Indoor Stadium badminton courts", description: "The badminton net posts on courts 2 and 3 are heavily rusted and the bases are loose — they wobble during play and could tip over.", category: "other", subCategory: "General issue", priority: "low", status: "under_review", building: "Indoor Stadium", room: "Court 2 / 3", ageDays: 6, reporterIndex: 4, assignedDepartment: "General Maintenance" },
+  { title: "Drinking water cooler not working in Indoor Stadium", description: "The drinking water cooler next to the Indoor Stadium entrance has been dead for four days. Players come out of matches with no water to drink.", category: "water_shortage", subCategory: "No water supply", priority: "medium", status: "resolved", building: "Indoor Stadium", room: "Entrance lobby", ageDays: 15, reporterIndex: 3, assignedDepartment: "Plumbing & Water Works", assignedToName: "M. Das", resolution: "Cooler compressor repaired and the filter cartridge replaced — water is cooling normally.", feedback: { rating: 4, comment: "Working fine now.", solved: true }, photos: true },
+];
+
 const HISTORY_NOTES: Record<ComplaintStatus, string> = {
   submitted: "Complaint submitted with photo evidence",
   under_review: "Admin reviewed and validated the report",
   assigned: "Assigned to the responsible department",
   in_progress: "Maintenance team started work on site",
   resolved: "Resolved and verified with proof photos",
+  closed: "Closed by admin after final verification",
 };
 
 const DEMO_SEED_EMAIL = "demo.student@campusguard.app";
@@ -541,18 +575,23 @@ async function insertComplaint(
     assigned: 3,
     in_progress: 4,
     resolved: 5,
+    closed: 6,
   };
   const step = stepOf[spec.status];
 
+  const isDone = spec.status === "resolved" || spec.status === "closed";
   const photos = spec.photos
     ? [
-        urlPhoto(spec.title.replace(/^(Water|Two|Power|Library|Classroom|Unauthorised|Garbage)/, "").trim().slice(0, 34), spec.status === "resolved" ? "before" : "issue"),
+        urlPhoto(spec.title.replace(/^(Water|Two|Power|Library|Classroom|Unauthorised|Garbage)/, "").trim().slice(0, 34), isDone ? "before" : "issue"),
       ]
     : [];
 
-  const resolvedAt =
-    spec.status === "resolved"
-      ? createdAt + Math.max(6, spec.ageDays * 0.4) * 3600_000
+  const resolvedAt = isDone
+    ? createdAt + Math.max(6, spec.ageDays * 0.4) * 3600_000
+    : undefined;
+  const closedAt =
+    spec.status === "closed" && resolvedAt
+      ? resolvedAt + 12 * 3600_000
       : undefined;
 
   const id = await ctx.db.insert("complaints", {
@@ -586,7 +625,9 @@ async function insertComplaint(
     },
     assignedDepartment: spec.assignedDepartment,
     assignedToName: spec.assignedToName,
+    assignedAt: spec.status === "submitted" || spec.status === "under_review" ? undefined : createdAt + 6 * 3600_000,
     resolvedAt,
+    closedAt,
     resolutionNote: spec.resolution,
     resolvedBy: spec.resolution ? (spec.assignedToName ?? "Campus Team") : undefined,
     resolutionPhotos: spec.resolution
@@ -606,12 +647,14 @@ async function insertComplaint(
     "assigned",
     "in_progress",
     "resolved",
+    "closed",
   ];
   for (let s = 0; s < step; s++) {
     const status = statuses[s];
     await ctx.db.insert("statusHistory", {
       complaintId: id,
       status,
+      previousStatus: s > 0 ? statuses[s - 1] : undefined,
       note: HISTORY_NOTES[status],
       actorName:
         status === "submitted"
@@ -639,6 +682,36 @@ async function insertComplaint(
   return id;
 }
 
+/**
+ * Insert the building-coverage demo complaints exactly once per title
+ * (idempotent — safe on both fresh and already-seeded databases).
+ */
+async function insertCoverageComplaints(
+  ctx: MutationCtx,
+  studentId: Id<"users">,
+  now: number,
+) {
+  const existingTitles = new Set(
+    (await ctx.db.query("complaints").collect()).map((c) => c.title),
+  );
+  const reporterNames = DEMO_STUDENTS.map((s) => s.name);
+  let i = 0;
+  for (const spec of COVERAGE) {
+    if (existingTitles.has(spec.title)) continue;
+    const reporterIndex = spec.reporterIndex % reporterNames.length;
+    await insertComplaint(
+      ctx,
+      { ...spec, reporterIndex },
+      studentId,
+      reporterNames[reporterIndex],
+      3000 + i,
+      now,
+    );
+    i++;
+  }
+  return i;
+}
+
 export const ensureDemoData = mutation({
   args: {},
   handler: async (ctx) => {
@@ -652,6 +725,15 @@ export const ensureDemoData = mutation({
       await ensureDepartmentsAndLocations(ctx);
       if ((counter.floorDataNormVersion ?? 0) < 2) {
         await normalizeLegacyFloorData(ctx, counter._id);
+      }
+      // Backfill the building-coverage demo complaints once (Girls Hostel,
+      // Atrium, Galaria, Lecture Hall Complex, Indoor Stadium).
+      if ((counter.coverageVersion ?? 0) < 1) {
+        const { studentId } = await ensureDemoUsers(ctx);
+        if (studentId) {
+          await insertCoverageComplaints(ctx, studentId, Date.now());
+          await ctx.db.patch(counter._id, { coverageVersion: 1 });
+        }
       }
       return { seeded: true, message: "Demo data already loaded" };
     }
@@ -676,6 +758,10 @@ export const ensureDemoData = mutation({
         now,
       );
     }
+
+    // Building-coverage demo complaints (Girls Hostel, Atrium, Galaria,
+    // Lecture Hall Complex, Indoor Stadium) — CG-…004000+ codes.
+    await insertCoverageComplaints(ctx, studentId, now);
 
     // Generated backlog for realistic analytics / hotspots / trends
     const statusPool: ComplaintStatus[] = [
@@ -771,10 +857,15 @@ export const ensureDemoData = mutation({
         key: "root",
         nextComplaint: 1300,
         seeded: true,
+        coverageVersion: 1,
       });
     } else {
       counterId = counter._id;
-      await ctx.db.patch(counterId, { seeded: true, nextComplaint: 1300 });
+      await ctx.db.patch(counterId, {
+        seeded: true,
+        nextComplaint: 1300,
+        coverageVersion: 1,
+      });
     }
     await normalizeLegacyFloorData(ctx, counterId);
 

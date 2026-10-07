@@ -5,14 +5,15 @@ import {
   AlertOctagon,
   ArrowRight,
   BarChart3,
+  Bell,
   CheckCircle2,
   Clock,
   FileText,
   Loader2,
   MapPin,
+  Percent,
   Siren,
   Sparkles,
-  Star,
   Target,
   Timer,
   TrendingUp,
@@ -27,8 +28,8 @@ import { CategoryBars, PriorityDonut, TrendChart } from "@/components/campus/Cha
 import { EmptyState, SectionHeader, StatCard } from "@/components/campus/Cards";
 import { useAuth } from "@/hooks/use-auth";
 import { byCategory, byDepartment, computeStats, hotspots, monthlyTrend, type ComplaintLike } from "@/lib/stats";
-import { isOverdue } from "@/lib/campus";
-import { durationHuman } from "@/lib/format";
+import { isFinalStatus, isOverdue } from "@/lib/campus";
+import { durationHuman, timeAgo } from "@/lib/format";
 import {
   AnnouncementPanel,
   BadgesPanel,
@@ -90,9 +91,20 @@ function StudentView({
   const recent = [...complaints]
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 5);
+  const activeComplaints = complaints
+    .filter((c) => !isFinalStatus(c.status))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 4);
+  const resolvedComplaints = complaints
+    .filter((c) => isFinalStatus(c.status))
+    .sort((a, b) => (b.resolvedAt ?? b.createdAt) - (a.resolvedAt ?? a.createdAt))
+    .slice(0, 4);
+  const latestUpdates = notifications
+    .filter((n) => n.complaintId)
+    .slice(0, 4);
   const campusHotspots = hotspots(publicRows as ComplaintLike[]);
   const duplicateInsights = complaints
-    .filter((c) => c.status !== "resolved" && (c.ai?.duplicateCount ?? 0) > 0)
+    .filter((c) => !isFinalStatus(c.status) && (c.ai?.duplicateCount ?? 0) > 0)
     .slice(0, 3);
 
   const hour = new Date().getHours();
@@ -246,6 +258,87 @@ function StudentView({
         </div>
       </div>
 
+      {/* Student tracking: active / resolved / latest updates */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="glass rounded-2xl p-4">
+          <SectionHeader
+            title="Active complaints"
+            subtitle="Open and being worked on"
+            icon={<Loader2 className="size-4" />}
+          />
+          {activeComplaints.length === 0 ? (
+            <p className="px-1 py-2 text-sm text-muted-foreground">
+              Nothing open right now — nice and quiet.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {activeComplaints.map((c) => (
+                <ComplaintCard key={c._id} complaint={c} to={`/app/complaints/${c._id}`} />
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="glass rounded-2xl p-4">
+          <SectionHeader
+            title="Resolved complaints"
+            subtitle="Fixed & closed by the campus team"
+            icon={<CheckCircle2 className="size-4" />}
+          />
+          {resolvedComplaints.length === 0 ? (
+            <p className="px-1 py-2 text-sm text-muted-foreground">
+              No resolutions yet — your first fix will appear here.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {resolvedComplaints.map((c) => (
+                <ComplaintCard key={c._id} complaint={c} to={`/app/complaints/${c._id}`} />
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="glass rounded-2xl p-4">
+          <SectionHeader
+            title="Latest updates"
+            subtitle="Status changes on your reports"
+            icon={<Bell className="size-4" />}
+            action={
+              <Link to="/app/notifications" className="text-xs font-semibold text-sky-700 hover:underline">
+                All notifications
+              </Link>
+            }
+          />
+          {latestUpdates.length === 0 ? (
+            <p className="px-1 py-2 text-sm text-muted-foreground">
+              No updates yet — we'll ping you the moment something changes.
+            </p>
+          ) : (
+            <ul className="space-y-2.5">
+              {latestUpdates.map((n) => (
+                <li key={n._id}>
+                  <Link
+                    to={n.link ?? "/app/notifications"}
+                    className="glass-soft block rounded-xl p-3 transition hover:bg-white/80"
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {n.complaintCode && (
+                        <span className="font-mono text-[11px] font-bold text-sky-700">
+                          {n.complaintCode}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase">
+                        {timeAgo(n.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-sm font-semibold">{n.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.body}</p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       {/* Recent complaints */}
       <div className="glass rounded-2xl p-4">
         <SectionHeader
@@ -320,14 +413,14 @@ function StaffView({
   notifications: NotificationRows;
 }) {
   const stats = computeStats(complaints);
-  const open = complaints.filter((c) => c.status !== "resolved");
+  const open = complaints.filter((c) => !isFinalStatus(c.status));
   const newAssignments = open.filter((c) => c.status === "assigned");
   const queue = [...open].sort((a, b) => {
     const rank = { critical: 0, high: 1, medium: 2, low: 3 } as const;
     return rank[a.priority] - rank[b.priority] || a.createdAt - b.createdAt;
   });
   const recentlyResolved = complaints
-    .filter((c) => c.status === "resolved")
+    .filter((c) => isFinalStatus(c.status))
     .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0))
     .slice(0, 4);
   const priorityCount = open.filter(
@@ -498,10 +591,14 @@ function AdminView({
     .slice(0, 6)
     .map((r) => ({ name: r.name, count: r.count }));
 
+  const criticalOpen = complaints
+    .filter((c) => c.priority === "critical" && !isFinalStatus(c.status))
+    .sort((a, b) => a.createdAt - b.createdAt);
+
   const attention = complaints
     .filter(
       (c) =>
-        c.status !== "resolved" &&
+        !isFinalStatus(c.status) &&
         (c.priority === "critical" || isOverdue(c.createdAt, c.resolvedAt, c.priority)),
     )
     .sort((a, b) => a.createdAt - b.createdAt)
@@ -550,23 +647,39 @@ function AdminView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* KPI overview — the six headline numbers for the admin homepage */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Total complaints" value={stats.total} hint="All time" icon={<FileText className="size-5" />} />
         <StatCard label="Pending" value={stats.pending} hint={`${stats.underReview} under review`} icon={<Clock className="size-5" />} tone="warn" />
-        <StatCard label="Assigned" value={stats.assigned} hint="Routed to departments" icon={<Target className="size-5" />} tone="info" />
-        <StatCard label="In progress" value={stats.inProgress} hint="Work underway" icon={<Loader2 className="size-5" />} />
-        <StatCard label="Resolved" value={stats.resolved} hint={`${stats.resolutionPct}% of total`} icon={<CheckCircle2 className="size-5" />} tone="success" />
-        <StatCard label="Critical open" value={stats.critical} hint="Emergency triage" icon={<Siren className="size-5" />} tone="danger" />
-        <StatCard label="Overdue" value={stats.overdue} hint="Past priority SLA" icon={<Timer className="size-5" />} tone="danger" />
-        <StatCard label="Avg. resolution" value={stats.avgResolutionHours === null ? "—" : durationHuman(stats.avgResolutionHours * 3600_000)} hint="Report → fixed" icon={<Timer className="size-5" />} tone="info" />
-        <StatCard label="Reopened" value={stats.reopened} hint="Feedback rejected" icon={<AlertOctagon className="size-5" />} tone="warn" />
-        <StatCard
-          label="Satisfaction"
-          value={stats.avgRating === null ? "—" : `${stats.avgRating.toFixed(1)}★`}
-          hint="Average rating"
-          icon={<Star className="size-5" />}
-          tone="success"
+        <StatCard label="In progress" value={stats.inProgress} hint={`${stats.assigned} assigned`} icon={<Loader2 className="size-5" />} />
+        <StatCard label="Resolved" value={stats.done} hint={`${stats.closed} closed`} icon={<CheckCircle2 className="size-5" />} tone="success" />
+        <StatCard label="Critical issues" value={stats.critical} hint="Emergency triage" icon={<Siren className="size-5" />} tone="danger" />
+        <StatCard label="Resolution rate" value={`${stats.resolutionPct}%`} hint={`${stats.avgResolutionHours === null ? "—" : durationHuman(stats.avgResolutionHours * 3600_000)} avg.`} icon={<Percent className="size-5" />} tone="info" />
+      </div>
+
+      {/* Critical issues at the top so urgent work is immediately visible */}
+      <div className="glass-strong glass-edge rounded-2xl p-4">
+        <SectionHeader
+          title="Critical issues"
+          subtitle={`${criticalOpen.length} open critical complaint${criticalOpen.length === 1 ? "" : "s"} — immediate attention required`}
+          icon={<Siren className="size-4 text-rose-600" />}
+          action={
+            <Link to="/app/complaints" className="text-xs font-semibold text-sky-700 hover:underline">
+              Triage board
+            </Link>
+          }
         />
+        {criticalOpen.length === 0 ? (
+          <p className="px-1 py-2 text-sm text-muted-foreground">
+            No open critical complaints. Everything is under control.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {criticalOpen.slice(0, 5).map((c) => (
+              <ComplaintCard key={c._id} complaint={c} to={`/app/complaints/${c._id}`} showReporter />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

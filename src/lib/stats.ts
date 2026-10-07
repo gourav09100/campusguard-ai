@@ -31,6 +31,9 @@ export interface Stats {
   assigned: number;
   inProgress: number;
   resolved: number;
+  closed: number;
+  /** resolved + closed — everything that reached a final state */
+  done: number;
   open: number;
   critical: number;
   overdue: number;
@@ -49,9 +52,14 @@ export function computeStats(
   const underReview = complaints.filter((c) => c.status === "under_review").length;
   const assigned = complaints.filter((c) => c.status === "assigned").length;
   const inProgress = complaints.filter((c) => c.status === "in_progress").length;
-  const resolvedList = complaints.filter((c) => c.status === "resolved");
-  const resolved = resolvedList.length;
-  const openList = complaints.filter((c) => c.status !== "resolved");
+  const resolvedList = complaints.filter(
+    (c) => c.status === "resolved" || c.status === "closed",
+  );
+  const resolved = complaints.filter((c) => c.status === "resolved").length;
+  const closed = complaints.filter((c) => c.status === "closed").length;
+  const openList = complaints.filter(
+    (c) => c.status !== "resolved" && c.status !== "closed",
+  );
   const critical = openList.filter((c) => c.priority === "critical").length;
 
   const overdue = openList.filter(
@@ -82,10 +90,14 @@ export function computeStats(
     assigned,
     inProgress,
     resolved,
+    closed,
+    done: resolved + closed,
     open: openList.length,
     critical,
     overdue,
-    resolutionPct: total ? Math.round((resolved / total) * 100) : 0,
+    resolutionPct: total
+      ? Math.round(((resolved + closed) / total) * 100)
+      : 0,
     avgResolutionHours,
     avgRating,
     reopened,
@@ -101,7 +113,7 @@ function countBy<T extends string>(
     const k = key(c);
     const entry = map.get(k) ?? { name: k, count: 0, open: 0 };
     entry.count += 1;
-    if (c.status !== "resolved") entry.open += 1;
+    if (c.status !== "resolved" && c.status !== "closed") entry.open += 1;
     map.set(k, entry);
   }
   return [...map.values()].sort((a, b) => b.count - a.count);
@@ -113,13 +125,31 @@ export const byPriority = (c: ComplaintLike[]) => countBy(c, (x) => x.priority);
 export const byDepartment = (c: ComplaintLike[]) =>
   countBy(c, (x) => x.assignedDepartment ?? "Unassigned");
 
+/** Complaint count per workflow status (admin analytics chart). */
+export function byStatus(complaints: ComplaintLike[]) {
+  const order: ComplaintStatus[] = [
+    "submitted",
+    "under_review",
+    "assigned",
+    "in_progress",
+    "resolved",
+    "closed",
+  ];
+  return order.map((s) => ({
+    name: s,
+    count: complaints.filter((c) => c.status === s).length,
+    open: 0,
+  }));
+}
+
 export const hotspots = (c: ComplaintLike[]) =>
   byBuilding(c).map((h) => {
     const rows = c.filter((x) => x.building === h.name);
     return {
       ...h,
       critical: rows.filter((x) => x.priority === "critical").length,
-      resolved: rows.filter((x) => x.status === "resolved").length,
+      resolved: rows.filter((x) => x.status === "resolved" || x.status === "closed")
+        .length,
     };
   });
 
@@ -139,7 +169,8 @@ export function monthlyTrend(
     out.push({
       month: label,
       total: rows.length,
-      resolved: rows.filter((c) => c.status === "resolved").length,
+      resolved: rows.filter((c) => c.status === "resolved" || c.status === "closed")
+        .length,
     });
   }
   return out;
@@ -154,7 +185,9 @@ export function departmentPerformance(complaints: ComplaintLike[]) {
   }
   return [...groups.entries()]
     .map(([name, rows]) => {
-      const resolved = rows.filter((r) => r.status === "resolved");
+      const resolved = rows.filter(
+        (r) => r.status === "resolved" || r.status === "closed",
+      );
       const durations = resolved
         .filter((r) => r.resolvedAt)
         .map((r) => ((r.resolvedAt as number) - r.createdAt) / 3600_000);

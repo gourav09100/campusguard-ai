@@ -12,7 +12,8 @@ export type ComplaintStatus =
   | "under_review"
   | "assigned"
   | "in_progress"
-  | "resolved";
+  | "resolved"
+  | "closed";
 
 export interface CategoryDef {
   id: string;
@@ -197,6 +198,7 @@ export const STATUSES: {
   { id: "assigned", label: "Assigned", step: 3, description: "Assigned to a department / staff member" },
   { id: "in_progress", label: "In Progress", step: 4, description: "Work is underway on site" },
   { id: "resolved", label: "Resolved", step: 5, description: "Fixed and verified with proof" },
+  { id: "closed", label: "Closed", step: 6, description: "Verified by admin and archived" },
 ];
 
 export function statusStep(s: ComplaintStatus): number {
@@ -213,7 +215,13 @@ export const STATUS_FLOW: ComplaintStatus[] = [
   "assigned",
   "in_progress",
   "resolved",
+  "closed",
 ];
+
+/** Statuses that count as "done" (resolved and/or archived). */
+export function isFinalStatus(s: ComplaintStatus): boolean {
+  return s === "resolved" || s === "closed";
+}
 
 /** Departments seeded into the database. */
 export const DEPARTMENTS: { name: string; description: string; color: string; head: string }[] = [

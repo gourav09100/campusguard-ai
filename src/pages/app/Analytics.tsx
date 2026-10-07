@@ -26,6 +26,7 @@ import {
   byBuilding,
   byCategory,
   byDepartment,
+  byStatus,
   computeStats,
   departmentPerformance,
   monthlyTrend,
@@ -33,6 +34,7 @@ import {
   topIssue,
   type ComplaintLike,
 } from "@/lib/stats";
+import { statusLabel } from "@/lib/campus";
 
 export default function Analytics() {
   return (
@@ -69,6 +71,10 @@ function AnalyticsInner() {
   const perf = useMemo(() => departmentPerformance(rows), [rows]);
   const sat = useMemo(() => satisfaction(rows), [rows]);
   const issue = useMemo(() => topIssue(rows), [rows]);
+  const statusRows = useMemo(
+    () => byStatus(rows).map((r) => ({ name: statusLabel(r.name), count: r.count })),
+    [rows],
+  );
   const priorityRows = ["critical", "high", "medium", "low"].map((p) => ({
     name: p,
     count: rows.filter((r) => r.priority === p).length,
@@ -194,6 +200,56 @@ function AnalyticsInner() {
             <div className="glass rounded-2xl p-4">
               <SectionHeader title="Complaints by department" subtitle="Routing load" icon={<Percent className="size-4" />} />
               <CategoryBars rows={deptRows} color="#6366f1" />
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="glass rounded-2xl p-4">
+              <SectionHeader
+                title="Complaints by status"
+                subtitle="Workflow distribution — submitted to closed"
+                icon={<Clock className="size-4" />}
+              />
+              <CategoryBars rows={statusRows} color="#0891b2" height={250} />
+            </div>
+            <div className="glass rounded-2xl p-4">
+              <SectionHeader
+                title="Resolution trends"
+                subtitle="Average resolution time & rate"
+                icon={<Percent className="size-4" />}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="glass-soft rounded-xl p-4 text-center">
+                  <p className="text-2xl font-extrabold text-sky-700">
+                    {stats.avgResolutionHours === null
+                      ? "—"
+                      : durationHuman(stats.avgResolutionHours * 3600_000)}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Avg. resolution time
+                  </p>
+                </div>
+                <div className="glass-soft rounded-xl p-4 text-center">
+                  <p className="text-2xl font-extrabold text-emerald-700">
+                    {stats.resolutionPct}%
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Resolution rate
+                  </p>
+                </div>
+                <div className="glass-soft rounded-xl p-4 text-center">
+                  <p className="text-2xl font-extrabold text-indigo-700">{stats.done}</p>
+                  <p className="mt-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Resolved + closed
+                  </p>
+                </div>
+                <div className="glass-soft rounded-xl p-4 text-center">
+                  <p className="text-2xl font-extrabold text-rose-700">{stats.overdue}</p>
+                  <p className="mt-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Past SLA
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

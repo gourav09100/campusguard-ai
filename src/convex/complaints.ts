@@ -43,6 +43,7 @@ const statusArg = v.union(
   v.literal("assigned"),
   v.literal("in_progress"),
   v.literal("resolved"),
+  v.literal("closed"),
 );
 
 const priorityArg = v.union(
@@ -59,10 +60,12 @@ async function addHistory(
   note: string,
   actorName: string,
   actorRole: string,
+  previousStatus?: Doc<"complaints">["status"],
 ) {
   await ctx.db.insert("statusHistory", {
     complaintId,
     status,
+    previousStatus,
     note,
     actorName,
     actorRole,
@@ -259,26 +262,35 @@ export const checkDuplicates = query({
   },
   handler: async (ctx, args) => {
     await requireUser(ctx);
+    type Match = {
+      id: string;
+      complaintId: string;
+      title: string;
+      status: Doc<"complaints">["status"];
+      location: string;
+      createdAt: number;
+    };
+    const empty = { count: 0, matches: [] as Match[] };
     if (args.title.trim().length < 4 && args.description.trim().length < 12) {
-      return { count: 0, matches: [] as { complaintId: string; title: string }[] };
+      return empty;
     }
-    const all: ExistingComplaint[] = (await ctx.db
+    const docs = (await ctx.db
       .query("complaints")
       .withIndex("by_created")
       .order("desc")
       .take(300))
-      .filter((c) => !c.mergedInto)
-      .map((c) => ({
-        id: c._id,
-        complaintId: c.complaintId,
-        title: c.title,
-        description: c.description,
-        category: c.category,
-        building: c.building,
-        floor: c.floor ?? null,
-        status: c.status,
-        reporterId: c.reporterId,
-      }));
+      .filter((c) => !c.mergedInto);
+    const all: ExistingComplaint[] = docs.map((c) => ({
+      id: c._id,
+      complaintId: c.complaintId,
+      title: c.title,
+      description: c.description,
+      category: c.category,
+      building: c.building,
+      floor: c.floor ?? null,
+      status: c.status,
+      reporterId: c.reporterId,
+    }));
 
     const { count, matches } = detectDuplicates(
       {
@@ -289,11 +301,97 @@ export const checkDuplicates = query({
       },
       all,
     );
-    const sampleIds = matches.slice(0, 3);
-    const samples = all
-      .filter((c) => sampleIds.includes(c.complaintId ?? ""))
-      .map((c) => ({ complaintId: c.complaintId ?? "", title: c.title }));
+    const byCode = new Map(all.map((c) => [c.complaintId ?? "", c]));
+    const samples: Match[] = [];
+    for (const code of matches.slice(0, 3)) {
+      const hit = byCode.get(code);
+      if (!hit) continue;
+      const doc = docs.find((d) => d.complaintId === code);
+      samples.push({
+        id: hit.id ?? "",
+        complaintId: hit.complaintId ?? "",
+        title: hit.title,
+        status: hit.status,
+        location: [hit.building, hit.floor].filter(Boolean).join(" · "),
+        createdAt: doc?.createdAt ?? 0,
+      });
+    }
     return { count, matches: samples };
+  },
+});
+
+/**
+ * Related complaints — same building+category, or same building with title
+ * overlap. Shown in the "Related Complaints" section so admins can spot
+ * multiple reports about the same underlying issue (and merge them).
+ */
+export const related = query({
+  args: { complaintId: v.id("complaints") },
+  handler: async (ctx, { complaintId }) => {
+    const { userId, user } = await requireUser(ctx);
+    const complaint = await ctx.db.get(complaintId);
+    if (!complaint) return [];
+    // Same access rule as get(): owner, staff or admin only.
+    if (
+      user.role !== "admin" &&
+      user.role !== "teacher" &&
+      complaint.reporterId !== userId
+    ) {
+      return [];
+    }
+    const docs = (await ctx.db
+      .query("complaints")
+      .withIndex("by_created")
+      .order("desc")
+      .take(300))
+      .filter((c) => !c.mergedInto && c._id !== complaintId);
+
+    const candTokens = new Set(
+      complaint.title
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length > 3),
+    );
+    const scored = docs
+      .map((c) => {
+        const sameBuilding = c.building === complaint.building;
+        const sameCategory = c.category === complaint.category;
+        const titleTokens = c.title
+          .toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter((t) => t.length > 3);
+        const overlap = titleTokens.filter((t) => candTokens.has(t)).length;
+        let score = 0;
+        if (sameBuilding && sameCategory) score += 2;
+        else if (sameBuilding) score += 1;
+        else if (sameCategory && overlap > 0) score += 1;
+        if (overlap > 0) score += 1;
+        if (sameBuilding && overlap > 0) score += 1;
+        return { c, score, overlap };
+      })
+      .filter((r) => r.score >= 2)
+      .sort((a, b) => b.score - a.score || b.c.createdAt - a.c.createdAt)
+      .slice(0, 6);
+
+    return scored.map(({ c, score }) => ({
+      _id: c._id,
+      complaintId: c.complaintId,
+      title: c.title,
+      status: c.status,
+      priority: c.priority,
+      category: c.category,
+      building: c.building,
+      block: c.block,
+      floor: c.floor,
+      createdAt: c.createdAt,
+      resolvedAt: c.resolvedAt,
+      reason:
+        score >= 4
+          ? "Same building & issue"
+          : c.category === complaint.category
+            ? "Same category"
+            : "Same building",
+    }));
   },
 });
 
@@ -511,14 +609,19 @@ export const assign = mutation({
     const { user } = await requireAdmin(ctx);
     const c = await loadComplaint(ctx, args.complaintId);
     if (c.status === "resolved") throw new Error("Complaint already resolved");
+    if (c.status === "closed") {
+      throw new Error("Complaint is closed — reopen it before reassigning");
+    }
 
     const staffLabel = args.staffName ?? args.department;
+    const now = Date.now();
     await ctx.db.patch(args.complaintId, {
       assignedDepartment: args.department,
       assignedTo: args.staffUserId,
       assignedToName: args.staffName,
+      assignedAt: now,
       status: "assigned",
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
     await addHistory(
       ctx,
@@ -527,6 +630,7 @@ export const assign = mutation({
       args.note?.trim() || `Assigned to ${staffLabel}`,
       user.name ?? "Admin",
       "admin",
+      c.status,
     );
     await notify(ctx, {
       userId: c.reporterId,
@@ -576,6 +680,9 @@ export const accept = mutation({
     }
     const c = await loadComplaint(ctx, args.complaintId);
     if (c.status === "resolved") throw new Error("Complaint already resolved");
+    if (c.status === "closed") {
+      throw new Error("Complaint is closed — reopen it first");
+    }
     if (c.status === "in_progress") {
       throw new Error("This complaint is already being worked on");
     }
@@ -601,6 +708,7 @@ export const accept = mutation({
       status: "in_progress",
       assignedTo: c.assignedTo ?? userId,
       assignedToName: c.assignedToName ?? staffName,
+      assignedAt: c.assignedAt ?? now,
       updatedAt: now,
     });
     await addHistory(
@@ -610,6 +718,7 @@ export const accept = mutation({
       `Assignment accepted by ${staffName} — work started on site`,
       staffName,
       user.role ?? "teacher",
+      c.status,
     );
     await notify(ctx, {
       userId: c.reporterId,
@@ -655,6 +764,12 @@ export const updateStatus = mutation({
     if (args.status === "resolved") {
       throw new Error("Use resolve() to mark a complaint as resolved");
     }
+    if (args.status === "closed") {
+      throw new Error("Use close() to archive a resolved complaint");
+    }
+    if (args.status === c.status) {
+      throw new Error(`Complaint is already ${args.status.replace("_", " ")}`);
+    }
     await ctx.db.patch(args.complaintId, {
       status: args.status,
       updatedAt: Date.now(),
@@ -666,6 +781,7 @@ export const updateStatus = mutation({
       args.note.trim() || "Status updated",
       user.name ?? "Staff",
       user.role ?? "teacher",
+      c.status,
     );
     await notify(ctx, {
       userId: c.reporterId,
@@ -721,6 +837,9 @@ export const resolve = mutation({
     }
     const c = await loadComplaint(ctx, args.complaintId);
     if (c.status === "resolved") throw new Error("Already resolved");
+    if (c.status === "closed") {
+      throw new Error("Complaint is closed — reopen it before resolving again");
+    }
     const now = Date.now();
 
     await ctx.db.patch(args.complaintId, {
@@ -738,6 +857,7 @@ export const resolve = mutation({
       args.note.trim() || "Resolved with proof",
       user.name ?? "Staff",
       user.role ?? "teacher",
+      c.status,
     );
     await notify(ctx, {
       userId: c.reporterId,
@@ -791,6 +911,70 @@ export const resolve = mutation({
   },
 });
 
+/**
+ * Staff / admin closes a resolved complaint (final archival step of the
+ * workflow: submitted → … → resolved → closed). Notifies the student.
+ */
+export const close = mutation({
+  args: {
+    complaintId: v.id("complaints"),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireUser(ctx);
+    if (user.role !== "admin" && user.role !== "teacher") {
+      throw new Error("Staff access required");
+    }
+    const c = await loadComplaint(ctx, args.complaintId);
+    if (c.status === "closed") throw new Error("Already closed");
+    if (c.status !== "resolved") {
+      throw new Error("A complaint must be resolved before it can be closed");
+    }
+    const now = Date.now();
+    await ctx.db.patch(args.complaintId, {
+      status: "closed",
+      closedAt: now,
+      updatedAt: now,
+    });
+    await addHistory(
+      ctx,
+      args.complaintId,
+      "closed",
+      args.note?.trim() || "Complaint closed after final verification",
+      user.name ?? "Staff",
+      user.role ?? "teacher",
+      "resolved",
+    );
+    await notify(ctx, {
+      userId: c.reporterId,
+      title: `${c.complaintId} closed`,
+      body:
+        args.note?.trim() ||
+        `"${c.title}" has been closed — thanks for reporting it.`,
+      type: "closed",
+      complaintId: c._id,
+      complaintCode: c.complaintId,
+      link: `/app/complaints/${c._id}`,
+    });
+    if (user.role === "teacher") {
+      await notifyUsers(
+        ctx,
+        ["admin"],
+        () => true,
+        {
+          title: `${c.complaintId} closed by ${user.name ?? "staff"}`,
+          body: args.note?.trim() || "Complaint archived after verification.",
+          type: "closed",
+          complaintId: c._id,
+          complaintCode: c.complaintId,
+          link: `/app/complaints/${c._id}`,
+        },
+      );
+    }
+    return c._id;
+  },
+});
+
 /** Reopen a complaint (owner after unsatisfactory feedback, or admin). */
 export const reopen = mutation({
   args: {
@@ -804,9 +988,13 @@ export const reopen = mutation({
     if (!isOwner && user.role !== "admin") {
       throw new Error("Only the reporter or an admin can reopen");
     }
+    if (c.status === "under_review" || c.status === "submitted") {
+      throw new Error("Complaint is already open for review");
+    }
     await ctx.db.patch(args.complaintId, {
       status: "under_review",
       resolvedAt: undefined,
+      closedAt: undefined,
       reopenedCount: (c.reopenedCount ?? 0) + 1,
       updatedAt: Date.now(),
     });
@@ -817,6 +1005,7 @@ export const reopen = mutation({
       `Reopened: ${args.reason.trim() || "Issue not fully resolved"}`,
       user.name ?? "User",
       user.role ?? "student",
+      c.status,
     );
     // Reporter + assigned staff learn about the reopen; admins are notified below.
     if (c.reporterId !== userId) {
@@ -881,6 +1070,7 @@ export const escalate = mutation({
       `Escalated to ${priority.toUpperCase()}: ${args.reason.trim() || "Reporter requested escalation"}`,
       user.name ?? "User",
       user.role ?? "student",
+      c.status,
     );
     // Reporter + assigned staff get the escalation; admins are notified below.
     if (c.reporterId !== userId) {
@@ -939,6 +1129,7 @@ export const setPriority = mutation({
       `Priority changed to ${args.priority.toUpperCase()} by admin`,
       user.name ?? "Admin",
       "admin",
+      c.status,
     );
     // Priority changes notify the student and the assigned staff member.
     if (c.reporterId !== user._id) {
@@ -958,6 +1149,76 @@ export const setPriority = mutation({
         title: `${c.complaintId} priority changed`,
         body: `Priority is now ${args.priority.toUpperCase()} — "${c.title}".`,
         type: "status",
+        complaintId: c._id,
+        complaintCode: c.complaintId,
+        link: `/app/complaints/${c._id}`,
+      });
+    }
+    return c._id;
+  },
+});
+
+/**
+ * Admin accepts or manually edits the AI suggestions for a complaint.
+ * Optionally applies the (possibly edited) suggestion to the complaint's
+ * category / priority / department and records the decision on the timeline.
+ */
+export const updateAi = mutation({
+  args: {
+    complaintId: v.id("complaints"),
+    category: v.string(),
+    subCategory: v.optional(v.string()),
+    priority: priorityArg,
+    department: v.string(),
+    summary: v.string(),
+    suggestedAction: v.string(),
+    confidence: v.number(),
+    /** true = apply the suggestion to the complaint fields as well */
+    apply: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireAdmin(ctx);
+    const c = await loadComplaint(ctx, args.complaintId);
+    const now = Date.now();
+    const ai = {
+      category: args.category,
+      subCategory: args.subCategory ?? c.ai?.subCategory ?? "",
+      priority: args.priority,
+      department: args.department,
+      summary: args.summary,
+      suggestedAction: args.suggestedAction,
+      confidence: args.confidence,
+      duplicateCount: c.ai?.duplicateCount ?? 0,
+    };
+    await ctx.db.patch(args.complaintId, {
+      ai,
+      ...(args.apply
+        ? {
+            category: args.category,
+            subCategory: args.subCategory,
+            priority: args.priority,
+            assignedDepartment: args.department,
+          }
+        : {}),
+      updatedAt: now,
+    });
+    await addHistory(
+      ctx,
+      args.complaintId,
+      c.status,
+      args.apply
+        ? `AI suggestion accepted and applied (${args.category} · ${args.priority.toUpperCase()} · ${args.department})`
+        : `AI suggestion updated manually (${args.category} · ${args.priority.toUpperCase()} · ${args.department})`,
+      user.name ?? "Admin",
+      "admin",
+      c.status,
+    );
+    if (c.reporterId !== user._id) {
+      await notify(ctx, {
+        userId: c.reporterId,
+        title: `${c.complaintId} reviewed`,
+        body: `Admin reviewed the AI analysis — ${args.category} · ${args.priority.toUpperCase()} priority.`,
+        type: "reviewed",
         complaintId: c._id,
         complaintCode: c.complaintId,
         link: `/app/complaints/${c._id}`,
@@ -1059,7 +1320,9 @@ export const submitFeedback = mutation({
     const { userId, user } = await requireUser(ctx);
     const c = await loadComplaint(ctx, args.complaintId);
     if (c.reporterId !== userId) throw new Error("Only the reporter can give feedback");
-    if (c.status !== "resolved") throw new Error("Feedback opens after resolution");
+    if (c.status !== "resolved" && c.status !== "closed") {
+      throw new Error("Feedback opens after resolution");
+    }
     const rating = Math.max(1, Math.min(5, Math.round(args.rating)));
 
     await ctx.db.patch(args.complaintId, {
@@ -1077,6 +1340,7 @@ export const submitFeedback = mutation({
       await ctx.db.patch(args.complaintId, {
         status: "under_review",
         resolvedAt: undefined,
+        closedAt: undefined,
         reopenedCount: (c.reopenedCount ?? 0) + 1,
       });
       await addHistory(
@@ -1086,6 +1350,7 @@ export const submitFeedback = mutation({
         `Feedback: problem NOT solved (${rating}★) — flagged for admin review`,
         user.name ?? "Student",
         "student",
+        c.status,
       );
       await notifyUsers(
         ctx,
@@ -1108,6 +1373,7 @@ export const submitFeedback = mutation({
         `Feedback: ${rating}★ — problem solved`,
         user.name ?? "Student",
         "student",
+        c.status,
       );
     }
     return c._id;
@@ -1133,6 +1399,7 @@ export const merge = mutation({
       `Merged into ${target.complaintId} by admin`,
       user.name ?? "Admin",
       "admin",
+      source.status,
     );
     await notify(ctx, {
       userId: source.reporterId,

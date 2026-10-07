@@ -2,7 +2,7 @@ import { ChevronRight, Clock, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { formatLocation, isOverdue } from "@/lib/campus";
+import { formatLocation, isFinalStatus, isOverdue } from "@/lib/campus";
 import { timeAgo } from "@/lib/format";
 import { CategoryIcon, PriorityBadge, StatusBadge } from "./Badges";
 
@@ -18,7 +18,7 @@ export function ComplaintCard({
   footer?: ReactNode;
 }) {
   const overdue =
-    complaint.status !== "resolved" &&
+    !isFinalStatus(complaint.status) &&
     isOverdue(complaint.createdAt, complaint.resolvedAt, complaint.priority);
 
   const body = (

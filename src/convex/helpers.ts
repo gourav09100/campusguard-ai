@@ -41,6 +41,7 @@ export async function notify(
       | "assigned"
       | "status"
       | "resolved"
+      | "closed"
       | "reopened"
       | "announcement"
       | "emergency"
@@ -56,7 +57,10 @@ export async function notify(
   const prefs = user?.prefs;
   if (args.type === "announcement" && prefs && !prefs.announcements) return;
   if (
-    (args.type === "resolved" || args.type === "assigned" || args.type === "status") &&
+    (args.type === "resolved" ||
+      args.type === "closed" ||
+      args.type === "assigned" ||
+      args.type === "status") &&
     prefs &&
     !prefs.complaintUpdates
   ) {

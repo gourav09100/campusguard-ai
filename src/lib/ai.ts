@@ -225,7 +225,9 @@ export function detectDuplicates(
   const candTokens = tokens(`${candidate.title} ${candidate.description}`);
   const matches: string[] = [];
   for (const c of existing) {
-    if (c.status === "resolved") continue;
+    // Finished complaints (resolved / closed) are not active duplicates —
+    // a new report about them is a genuinely new issue.
+    if (c.status === "resolved" || c.status === "closed") continue;
     const samePlace = candidate.building
       ? c.building.toLowerCase() === candidate.building.toLowerCase()
       : true;
@@ -307,6 +309,7 @@ function statusHuman(s: ComplaintStatus): string {
     assigned: "Assigned to a department",
     in_progress: "Work in progress",
     resolved: "Resolved",
+    closed: "Closed",
   }[s];
 }
 

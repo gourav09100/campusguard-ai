@@ -18,6 +18,14 @@ import { PriorityBadge, StatusBadge } from "@/components/campus/Badges";
 import { SectionHeader } from "@/components/campus/Cards";
 import { PhotoUpload, type UploadPhoto } from "@/components/campus/PhotoUpload";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +46,7 @@ import {
   PRIORITIES,
   blocksFor,
   floorOptionsFor,
+  statusLabel,
   validateCampusLocation,
   type Priority,
 } from "@/lib/campus";
@@ -60,6 +69,7 @@ export default function ReportProblem() {
   const [gpsBusy, setGpsBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dupDialogOpen, setDupDialogOpen] = useState(false);
 
   const dupCheck = useQuery(api.complaints.checkDuplicates, {
     title,
@@ -141,6 +151,17 @@ export default function ReportProblem() {
     });
     if (locationError) return setError(locationError);
 
+    // Duplicate detection: warn (never block) before creating a new complaint.
+    if (duplicateCount > 0 && !dupDialogOpen && (dupCheck?.matches.length ?? 0) > 0) {
+      setDupDialogOpen(true);
+      return;
+    }
+
+    await submitNow();
+  }
+
+  async function submitNow() {
+    setDupDialogOpen(false);
     setSubmitting(true);
     try {
       const ai = {
@@ -560,9 +581,72 @@ export default function ReportProblem() {
       </form>
 
       <p className="flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-        <        StatusBadge status="submitted" /> Your complaint enters the workflow instantly and you
+        <StatusBadge status="submitted" /> Your complaint enters the workflow instantly and you
         get a permanent tracking ID like <span className="font-mono font-bold">CG-2026-0001</span>.
       </p>
+
+      {/* Duplicate warning — offers a choice, never blocks submission */}
+      <Dialog open={dupDialogOpen} onOpenChange={setDupDialogOpen}>
+        <DialogContent className="bg-white/95 backdrop-blur-xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CopyCheck className="size-5 text-amber-600" /> Similar complaint already exists
+            </DialogTitle>
+            <DialogDescription>
+              CampusGuard AI found {duplicateCount} similar open complaint
+              {duplicateCount === 1 ? "" : "s"} on campus. You can follow the existing ticket
+              or continue and create a new one.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2.5">
+            {(dupCheck?.matches ?? []).map((m) => (
+              <div
+                key={m.complaintId}
+                className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-extrabold text-sky-700">
+                    {m.complaintId}
+                  </span>
+                  <StatusBadge status={m.status} />
+                  <span className="text-[10px] font-bold tracking-wide text-muted-foreground uppercase">
+                    {statusLabel(m.status)}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-semibold">{m.title}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{m.location}</p>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full border-white/80 bg-white/70 sm:w-auto"
+              onClick={() => {
+                const first = dupCheck?.matches[0];
+                setDupDialogOpen(false);
+                if (first?.id) navigate(`/app/complaints/${first.id}`);
+              }}
+            >
+              View existing complaint
+            </Button>
+            <Button
+              className="w-full bg-gradient-to-r from-sky-500 to-cyan-600 text-white hover:from-sky-600 hover:to-cyan-700 sm:w-auto"
+              disabled={submitting}
+              onClick={() => void submitNow()}
+            >
+              {submitting ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 size-4" />
+              )}
+              Continue creating new complaint
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

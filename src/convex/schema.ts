@@ -35,6 +35,7 @@ export const statusValidator = v.union(
   v.literal("assigned"),
   v.literal("in_progress"),
   v.literal("resolved"),
+  v.literal("closed"),
 );
 export type ComplaintStatus = Infer<typeof statusValidator>;
 
@@ -125,8 +126,11 @@ const schema = defineSchema(
       assignedDepartment: v.optional(v.string()),
       assignedTo: v.optional(v.id("users")),
       assignedToName: v.optional(v.string()),
+      /** when the complaint was (re)assigned to a department/staff member */
+      assignedAt: v.optional(v.number()),
 
       resolvedAt: v.optional(v.number()),
+      closedAt: v.optional(v.number()),
       resolutionNote: v.optional(v.string()),
       resolvedBy: v.optional(v.string()),
       resolutionPhotos: v.optional(v.array(photoValidator)),
@@ -154,6 +158,8 @@ const schema = defineSchema(
     statusHistory: defineTable({
       complaintId: v.id("complaints"),
       status: statusValidator,
+      /** status before this transition (absent for the initial entry) */
+      previousStatus: v.optional(statusValidator),
       note: v.string(),
       actorName: v.string(),
       actorRole: v.string(),
@@ -185,6 +191,7 @@ const schema = defineSchema(
         v.literal("assigned"),
         v.literal("status"),
         v.literal("resolved"),
+        v.literal("closed"),
         v.literal("reopened"),
         v.literal("announcement"),
         v.literal("emergency"),
@@ -276,6 +283,8 @@ const schema = defineSchema(
       floorDataNormalized: v.optional(v.boolean()),
       /** version of the legacy-location scrub that has been applied */
       floorDataNormVersion: v.optional(v.number()),
+      /** version of the building-coverage demo complaint backfill */
+      coverageVersion: v.optional(v.number()),
     }).index("by_key", ["key"]),
   },
   {

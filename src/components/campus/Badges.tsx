@@ -61,6 +61,7 @@ export const STATUS_STYLES: Record<ComplaintStatus, string> = {
   assigned: "bg-cyan-600/12 text-cyan-700 border-cyan-500/35",
   in_progress: "bg-blue-600/12 text-blue-700 border-blue-500/35",
   resolved: "bg-emerald-600/12 text-emerald-700 border-emerald-500/35",
+  closed: "bg-zinc-600/12 text-zinc-700 border-zinc-500/35",
 };
 
 export const STATUS_ICON_BG: Record<ComplaintStatus, string> = {
@@ -69,6 +70,7 @@ export const STATUS_ICON_BG: Record<ComplaintStatus, string> = {
   assigned: "bg-cyan-500/12 text-cyan-600",
   in_progress: "bg-blue-500/12 text-blue-600",
   resolved: "bg-emerald-500/12 text-emerald-600",
+  closed: "bg-zinc-500/12 text-zinc-600",
 };
 
 export function StatusBadge({ status }: { status: ComplaintStatus }) {

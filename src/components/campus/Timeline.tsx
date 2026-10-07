@@ -1,11 +1,12 @@
 import { Check, Circle, Dot, Loader2 } from "lucide-react";
 import type { ComplaintStatus } from "@/lib/campus";
-import { STATUSES } from "@/lib/campus";
+import { STATUSES, statusLabel } from "@/lib/campus";
 import { formatDateTime, timeAgo } from "@/lib/format";
 
 export interface HistoryEntry {
   _id: string;
   status: ComplaintStatus;
+  previousStatus?: ComplaintStatus;
   note: string;
   actorName: string;
   actorRole: string;
@@ -87,6 +88,25 @@ export function StatusTimeline({
                     : s.description}
                 </p>
                 {history && (
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] font-semibold text-sky-700">
+                    {history.previousStatus && history.previousStatus !== history.status ? (
+                      <>
+                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-slate-600">
+                          {statusLabel(history.previousStatus)}
+                        </span>
+                        <span aria-hidden>→</span>
+                        <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-emerald-700">
+                          {statusLabel(history.status)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="rounded-full bg-sky-500/10 px-2 py-0.5 font-medium text-sky-700">
+                        {statusLabel(history.status)}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {history && (
                   <p className="mt-0.5 text-[11px] text-muted-foreground/80">
                     {formatDateTime(history.createdAt)}
                   </p>
@@ -111,6 +131,8 @@ export function ActivityFeed({
     role: string;
     createdAt: number;
     kind: "history" | "comment" | "internal" | "staff" | "admin";
+    /** previous → new status when this entry records a status change */
+    transition?: { from: ComplaintStatus; to: ComplaintStatus };
   }[];
 }) {
   const tone: Record<string, string> = {
@@ -142,6 +164,17 @@ export function ActivityFeed({
             {label[item.kind]}
           </span>
           <div className="min-w-0 flex-1">
+            {item.transition && item.transition.from !== item.transition.to && (
+              <p className="mb-1 inline-flex flex-wrap items-center gap-1 text-[11px] font-bold">
+                <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-slate-600">
+                  {statusLabel(item.transition.from)}
+                </span>
+                <span aria-hidden>→</span>
+                <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-emerald-700">
+                  {statusLabel(item.transition.to)}
+                </span>
+              </p>
+            )}
             <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
               {item.body}
             </p>

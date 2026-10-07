@@ -20,7 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES, PRIORITIES, STATUSES, dateFilterCutoff, isOverdue } from "@/lib/campus";
+import {
+  CATEGORIES,
+  PRIORITIES,
+  STATUSES,
+  blocksFor,
+  dateFilterCutoff,
+  floorOptionsFor,
+  isFinalStatus,
+  isOverdue,
+} from "@/lib/campus";
 import { computeStats, type ComplaintLike } from "@/lib/stats";
 import { initials } from "@/lib/format";
 
@@ -47,6 +56,9 @@ function ComplaintsInner() {
   const [priority, setPriority] = useState("all");
   const [status, setStatus] = useState("all");
   const [building, setBuilding] = useState("all");
+  const [block, setBlock] = useState("all");
+  const [floor, setFloor] = useState("all");
+  const [sort, setSort] = useState<"newest" | "oldest" | "priority">("newest");
   const [staffFilter, setStaffFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
 
@@ -65,6 +77,12 @@ function ComplaintsInner() {
     [complaints],
   );
 
+  const blockOptions = useMemo(() => blocksFor(building), [building]);
+  const floorOptions = useMemo(
+    () => floorOptionsFor(building, block === "all" ? null : block),
+    [building, block],
+  );
+
   const staffMembers = useMemo(
     () => (users ?? []).filter((u) => u.role === "teacher"),
     [users],
@@ -74,13 +92,13 @@ function ComplaintsInner() {
     const q = search.trim().toLowerCase();
     return complaints
       .filter((c) => {
-        if (tab === "open" && c.status === "resolved") return false;
-        if (tab === "resolved" && c.status !== "resolved") return false;
+        if (tab === "open" && isFinalStatus(c.status)) return false;
+        if (tab === "resolved" && !isFinalStatus(c.status)) return false;
         if (
           tab === "attention" &&
           !(
             c.priority === "critical" ||
-            (c.status !== "resolved" &&
+            (!isFinalStatus(c.status) &&
               isOverdue(c.createdAt, c.resolvedAt, c.priority))
           )
         ) {
@@ -90,6 +108,8 @@ function ComplaintsInner() {
         if (priority !== "all" && c.priority !== priority) return false;
         if (status !== "all" && c.status !== status) return false;
         if (building !== "all" && c.building !== building) return false;
+        if (block !== "all" && c.block !== block) return false;
+        if (floor !== "all" && c.floor !== floor) return false;
         if (staffFilter !== "all") {
           if (staffFilter === "unassigned") {
             if (c.assignedTo) return false;
@@ -115,8 +135,30 @@ function ComplaintsInner() {
         }
         return true;
       })
-      .sort((a, b) => b.createdAt - a.createdAt);
-  }, [complaints, tab, search, category, priority, status, building, staffFilter, dateFilter]);
+      .sort((a, b) => {
+        if (sort === "oldest") return a.createdAt - b.createdAt;
+        if (sort === "priority") {
+          const rank = { critical: 3, high: 2, medium: 1, low: 0 } as const;
+          return (
+            rank[b.priority] - rank[a.priority] || b.createdAt - a.createdAt
+          );
+        }
+        return b.createdAt - a.createdAt;
+      });
+  }, [
+    complaints,
+    tab,
+    search,
+    category,
+    priority,
+    status,
+    building,
+    block,
+    floor,
+    sort,
+    staffFilter,
+    dateFilter,
+  ]);
 
   const stats = computeStats(complaints as ComplaintLike[]);
 
@@ -138,7 +180,7 @@ function ComplaintsInner() {
     {
       id: "open",
       label: "Open",
-      count: complaints.filter((c) => c.status !== "resolved").length,
+      count: complaints.filter((c) => !isFinalStatus(c.status)).length,
     },
     {
       id: "attention",
@@ -146,14 +188,14 @@ function ComplaintsInner() {
       count: complaints.filter(
         (c) =>
           c.priority === "critical" ||
-          (c.status !== "resolved" &&
+          (!isFinalStatus(c.status) &&
             isOverdue(c.createdAt, c.resolvedAt, c.priority)),
       ).length,
     },
     {
       id: "resolved",
       label: "Resolved",
-      count: complaints.filter((c) => c.status === "resolved").length,
+      count: complaints.filter((c) => isFinalStatus(c.status)).length,
     },
   ];
 
@@ -233,7 +275,14 @@ function ComplaintsInner() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={building} onValueChange={setBuilding}>
+          <Select
+            value={building}
+            onValueChange={(v) => {
+              setBuilding(v);
+              setBlock("all");
+              setFloor("all");
+            }}
+          >
             <SelectTrigger className="bg-white/70">
               <SelectValue placeholder="Location" />
             </SelectTrigger>
@@ -244,6 +293,57 @@ function ComplaintsInner() {
                   {b}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={block}
+            onValueChange={(v) => {
+              setBlock(v);
+              setFloor("all");
+            }}
+            disabled={blockOptions.length === 0}
+          >
+            <SelectTrigger className="bg-white/70">
+              <SelectValue placeholder="Block" />
+            </SelectTrigger>
+            <SelectContent className="bg-white/95 backdrop-blur-xl">
+              <SelectItem value="all">
+                {blockOptions.length ? "All blocks" : "No blocks"}
+              </SelectItem>
+              {blockOptions.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={floor}
+            onValueChange={setFloor}
+            disabled={floorOptions.length === 0}
+          >
+            <SelectTrigger className="bg-white/70">
+              <SelectValue placeholder="Floor" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72 bg-white/95 backdrop-blur-xl">
+              <SelectItem value="all">
+                {floorOptions.length ? "All floors" : "No floors"}
+              </SelectItem>
+              {floorOptions.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={(v) => setSort(v as "newest" | "oldest" | "priority")}>
+            <SelectTrigger className="bg-white/70">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent className="bg-white/95 backdrop-blur-xl">
+              <SelectItem value="newest">Sort · Newest first</SelectItem>
+              <SelectItem value="oldest">Sort · Oldest first</SelectItem>
+              <SelectItem value="priority">Sort · Priority</SelectItem>
             </SelectContent>
           </Select>
           <Select value={priority} onValueChange={setPriority}>

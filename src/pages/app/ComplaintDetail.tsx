@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { CategoryIcon, PriorityBadge, StatusBadge } from "@/components/campus/Badges";
+import { ComplaintCard } from "@/components/campus/ComplaintCard";
 import { EmptyState, SectionHeader } from "@/components/campus/Cards";
 import { PhotoGrid, PhotoUpload, type UploadPhoto } from "@/components/campus/PhotoUpload";
 import { ActivityFeed, StatusTimeline, type HistoryEntry } from "@/components/campus/Timeline";
@@ -55,6 +56,7 @@ import {
   DEPARTMENT_NAMES,
   EMERGENCY_CONTACTS,
   STATUSES,
+  isFinalStatus,
   isOverdue,
   prioritySlaHours,
 } from "@/lib/campus";
@@ -84,6 +86,10 @@ function DetailInner() {
     api.complaints.comments,
     id ? { complaintId: id as Id<"complaints"> } : "skip",
   );
+  const related = useQuery(
+    api.complaints.related,
+    id ? { complaintId: id as Id<"complaints"> } : "skip",
+  );
 
   const [commentBody, setCommentBody] = useState("");
 
@@ -91,7 +97,12 @@ function DetailInner() {
   const addInternalNote = useMutation(api.complaints.addInternalNote);
   const escalate = useMutation(api.complaints.escalate);
 
-  if (complaint === undefined || history === undefined || comments === undefined) {
+  if (
+    complaint === undefined ||
+    history === undefined ||
+    comments === undefined ||
+    related === undefined
+  ) {
     return (
       <div className="space-y-3">
         <div className="glass h-32 animate-pulse rounded-2xl" />
@@ -112,7 +123,9 @@ function DetailInner() {
   }
 
   const isStaff = role === "teacher" || role === "admin";
-  const overdue = isOverdue(complaint.createdAt, complaint.resolvedAt, complaint.priority);
+  const overdue =
+    !isFinalStatus(complaint.status) &&
+    isOverdue(complaint.createdAt, complaint.resolvedAt, complaint.priority);
   const categoryDef = CATEGORIES.find((c) => c.id === complaint.category);
 
   const activity = [
@@ -123,6 +136,9 @@ function DetailInner() {
       role: h.actorRole,
       createdAt: h.createdAt,
       kind: "history" as const,
+      transition: h.previousStatus
+        ? ({ from: h.previousStatus, to: h.status } as const)
+        : undefined,
     })),
     ...comments
       .filter((c) => role === "admin" || c.kind !== "internal_note")
@@ -207,6 +223,7 @@ function DetailInner() {
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 font-semibold text-foreground">
                   {complaint.assignedDepartment}
                   {complaint.assignedToName ? ` · ${complaint.assignedToName}` : ""}
+                  {complaint.assignedAt ? ` · assigned ${formatDateTime(complaint.assignedAt)}` : ""}
                 </span>
               )}
             </div>
@@ -302,11 +319,22 @@ function DetailInner() {
                   </p>
                 </div>
               </div>
+              {/* Staff brief */}
+              <div className="mt-3 rounded-xl border border-indigo-300/50 bg-indigo-500/10 p-3 text-sm">
+                <p className="text-[11px] font-bold tracking-wide text-indigo-700 uppercase">
+                  Staff brief
+                </p>
+                <p className="mt-1 leading-relaxed">
+                  <span className="font-bold">Urgency:</span>{" "}
+                  {complaint.ai.priority.toUpperCase()} ({prioritySlaHours(complaint.ai.priority)}h SLA){" "}· <span className="font-bold">Category:</span> {complaint.ai.category}{" "}· <span className="font-bold">Department:</span> {complaint.ai.department}
+                </p>
+              </div>
+              {role === "admin" && <AdminAiReview complaint={complaint} />}
             </div>
           )}
 
           {/* Resolution proof */}
-          {complaint.status === "resolved" && (
+          {isFinalStatus(complaint.status) && (
             <div className="glass-strong glass-edge rounded-2xl p-4">
               <SectionHeader
                 title="Resolution proof"
@@ -365,6 +393,50 @@ function DetailInner() {
                     </p>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Related complaints (same issue / location) */}
+          {related.length > 0 && (
+            <div className="glass rounded-2xl p-4">
+              <SectionHeader
+                title="Related complaints"
+                subtitle={`${related.length} similar report${related.length === 1 ? "" : "s"} — possible duplicates of the same issue`}
+                icon={<GitMerge className="size-4" />}
+              />
+              <div className="space-y-2.5">
+                {related.map((r) => (
+                  <ComplaintCard
+                    key={r._id}
+                    complaint={{
+                      ...complaint,
+                      _id: r._id,
+                      complaintId: r.complaintId,
+                      title: r.title,
+                      status: r.status,
+                      priority: r.priority,
+                      category: r.category,
+                      building: r.building,
+                      block: r.block,
+                      floor: r.floor,
+                      createdAt: r.createdAt,
+                      resolvedAt: r.resolvedAt ?? undefined,
+                    }}
+                    to={`/app/complaints/${r._id}`}
+                    footer={
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                        {r.reason}
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+              {role === "admin" && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Tip: use <span className="font-semibold">Merge duplicate</span> in admin
+                  controls to link these into one master report.
+                </p>
               )}
             </div>
           )}
@@ -453,7 +525,7 @@ function DetailInner() {
               <Button
                 variant="outline"
                 className="w-full glass-soft border-white/80"
-                disabled={complaint.status === "resolved"}
+                disabled={isFinalStatus(complaint.status)}
                 onClick={async () => {
                   try {
                     await escalate({
@@ -488,6 +560,160 @@ function DetailInner() {
 }
 
 /* ================================================================== */
+/* ADMIN — AI SUGGESTION REVIEW                                        */
+/* ================================================================== */
+
+function AdminAiReview({ complaint }: { complaint: Doc<"complaints"> }) {
+  const updateAi = useMutation(api.complaints.updateAi);
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState(complaint.ai?.category ?? "");
+  const [priority, setPriorityValue] = useState(
+    complaint.ai?.priority ?? complaint.priority,
+  );
+  const [department, setDepartment] = useState(complaint.ai?.department ?? "");
+  const [summary, setSummary] = useState(complaint.ai?.summary ?? "");
+  const [action, setAction] = useState(complaint.ai?.suggestedAction ?? "");
+  const [busy, setBusy] = useState(false);
+
+  if (!complaint.ai) return null;
+
+  async function save(apply: boolean) {
+    setBusy(true);
+    try {
+      await updateAi({
+        complaintId: complaint._id,
+        category,
+        subCategory: complaint.ai?.subCategory,
+        priority,
+        department,
+        summary,
+        suggestedAction: action,
+        confidence: complaint.ai?.confidence ?? 0.8,
+        apply,
+      });
+      toast.success(
+        apply
+          ? "AI suggestion accepted & applied"
+          : "AI suggestion updated",
+        {
+          description: apply
+            ? "Category, priority and department now match the suggestion."
+            : "The analysis record was updated without changing the complaint.",
+        },
+      );
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update AI suggestion");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          className="bg-gradient-to-r from-sky-500 to-indigo-600 text-white hover:from-sky-600 hover:to-indigo-700"
+          disabled={busy}
+          onClick={() => save(true)}
+        >
+          <Sparkles className="mr-1.5 size-4" /> Accept AI suggestion
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="glass-soft border-white/80"
+          onClick={() => setOpen(true)}
+        >
+          <Tag className="mr-1.5 size-4" /> Edit suggestion
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2 rounded-xl border border-sky-300/50 bg-sky-500/10 p-3">
+      <p className="text-[11px] font-bold tracking-wide text-sky-700 uppercase">
+        Review AI suggestion
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className="bg-white/80">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72 bg-white/95 backdrop-blur-xl">
+            {CATEGORIES.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={priority} onValueChange={(v) => setPriorityValue(v as Doc<"complaints">["priority"])}>
+          <SelectTrigger className="bg-white/80">
+            <SelectValue placeholder="Priority" />
+          </SelectTrigger>
+          <SelectContent className="bg-white/95 backdrop-blur-xl">
+            {["low", "medium", "high", "critical"].map((p) => (
+              <SelectItem key={p} value={p}>
+                {p.toUpperCase()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={department} onValueChange={setDepartment}>
+          <SelectTrigger className="bg-white/80">
+            <SelectValue placeholder="Department" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72 bg-white/95 backdrop-blur-xl">
+            {DEPARTMENT_NAMES.map((d) => (
+              <SelectItem key={d} value={d}>
+                {d}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Textarea
+        rows={2}
+        value={summary}
+        onChange={(e) => setSummary(e.target.value)}
+        placeholder="Summary for staff…"
+        className="bg-white/80"
+      />
+      <Textarea
+        rows={2}
+        value={action}
+        onChange={(e) => setAction(e.target.value)}
+        placeholder="Suggested action…"
+        className="bg-white/80"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={busy} onClick={() => save(true)}>
+          Save & apply
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="glass-soft border-white/80"
+          disabled={busy}
+          onClick={() => save(false)}
+        >
+          Save only
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        “Save & apply” also updates the complaint's category, priority and department.
+      </p>
+    </div>
+  );
+}
+
+/* ================================================================== */
 /* STUDENT ACTIONS                                                     */
 /* ================================================================== */
 
@@ -499,7 +725,7 @@ function StudentActions({ complaint }: { complaint: Doc<"complaints"> }) {
   const [solved, setSolved] = useState<"yes" | "no">("yes");
   const [busy, setBusy] = useState(false);
 
-  const canReview = complaint.status === "resolved" && !complaint.feedback;
+  const canReview = isFinalStatus(complaint.status) && !complaint.feedback;
 
   if (!canReview) return null;
 
@@ -617,8 +843,10 @@ function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
   const [busy, setBusy] = useState(false);
 
   const nextStatuses = STATUSES.filter(
-    (s) => s.id !== complaint.status && s.id !== "resolved",
+    (s) =>
+      s.id !== complaint.status && s.id !== "resolved" && s.id !== "closed",
   );
+  const closeComplaint = useMutation(api.complaints.close);
 
   return (
     <div className="space-y-4">
@@ -684,7 +912,7 @@ function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
                 setBusy(false);
               }
             }}
-            disabled={busy || complaint.status === "resolved"}
+            disabled={busy || isFinalStatus(complaint.status)}
           >
             <SelectTrigger className="w-full bg-white/70">
               <SelectValue placeholder="Move to status…" />
@@ -722,7 +950,7 @@ function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
         />
         <Button
           className="mt-3 w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700"
-          disabled={busy || complaint.status === "resolved" || resolveNote.trim().length < 5}
+          disabled={busy || isFinalStatus(complaint.status) || resolveNote.trim().length < 5}
           onClick={async () => {
             setBusy(true);
             try {
@@ -748,6 +976,28 @@ function StaffActions({ complaint }: { complaint: Doc<"complaints"> }) {
           )}
           Mark as resolved
         </Button>
+        {complaint.status === "resolved" && (
+          <Button
+            variant="outline"
+            className="mt-2 w-full glass-soft border-white/80"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await closeComplaint({ complaintId: complaint._id });
+                toast.success("Complaint closed", {
+                  description: "The student has been notified that the ticket is archived.",
+                });
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not close");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Close complaint
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -762,6 +1012,7 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
   const updateStatus = useMutation(api.complaints.updateStatus);
   const setPriority = useMutation(api.complaints.setPriority);
   const resolve = useMutation(api.complaints.resolve);
+  const closeComplaint = useMutation(api.complaints.close);
   const reopen = useMutation(api.complaints.reopen);
   const merge = useMutation(api.complaints.merge);
   const remove = useMutation(api.complaints.remove);
@@ -885,13 +1136,13 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
                 "Status updated",
               )
             }
-            disabled={busy || complaint.status === "resolved"}
+            disabled={busy || isFinalStatus(complaint.status)}
           >
             <SelectTrigger className="w-full bg-white/70">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-white/95 backdrop-blur-xl">
-              {STATUSES.filter((s) => s.id !== "resolved").map((s) => (
+              {STATUSES.filter((s) => s.id !== "resolved" && s.id !== "closed").map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.label}
                 </SelectItem>
@@ -929,7 +1180,7 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
             <Button
               variant="outline"
               className="glass-soft border-white/80"
-              disabled={busy || complaint.status === "resolved"}
+              disabled={busy || isFinalStatus(complaint.status)}
               onClick={() =>
                 run(
                   "Resolve",
@@ -949,6 +1200,20 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
               variant="outline"
               className="glass-soft border-white/80"
               disabled={busy || complaint.status !== "resolved"}
+              onClick={() =>
+                run(
+                  "Close",
+                  () => closeComplaint({ complaintId: complaint._id }),
+                  "Complaint closed",
+                )
+              }
+            >
+              <CheckCircle2 className="mr-1.5 size-4" /> Close
+            </Button>
+            <Button
+              variant="outline"
+              className="glass-soft border-white/80 col-span-2"
+              disabled={busy || isFinalStatus(complaint.status)}
               onClick={() =>
                 run(
                   "Reopen",
