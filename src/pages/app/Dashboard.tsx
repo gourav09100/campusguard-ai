@@ -203,7 +203,7 @@ function StudentView({
         />
         <StatCard
           label="Resolved"
-          value={stats.resolved}
+          value={stats.done}
           hint={`${stats.resolutionPct}% resolution rate`}
           icon={<CheckCircle2 className="size-5" />}
           tone="success"
@@ -489,7 +489,7 @@ function StaffView({
         <StatCard label="New assignments" value={newAssignments.length} hint="Waiting to start" icon={<FileText className="size-5" />} tone="info" />
         <StatCard label="Under review" value={stats.underReview} hint="Validate first" icon={<Clock className="size-5" />} tone="warn" />
         <StatCard label="In progress" value={stats.inProgress} hint="Work underway" icon={<Loader2 className="size-5" />} />
-        <StatCard label="Resolved" value={stats.resolved} hint={`${stats.resolutionPct}% of yours`} icon={<CheckCircle2 className="size-5" />} tone="success" />
+        <StatCard label="Resolved" value={stats.done} hint={`${stats.resolutionPct}% of yours`} icon={<CheckCircle2 className="size-5" />} tone="success" />
         <StatCard label="Critical / High" value={priorityCount} hint="Needs attention" icon={<Siren className="size-5" />} tone="danger" />
         <StatCard label="Overdue" value={stats.overdue} hint="Past priority SLA" icon={<Timer className="size-5" />} tone="warn" />
       </div>

@@ -285,6 +285,8 @@ const schema = defineSchema(
       floorDataNormVersion: v.optional(v.number()),
       /** version of the building-coverage demo complaint backfill */
       coverageVersion: v.optional(v.number()),
+      /** one-time backfill of reporterEmail on seeded complaints */
+      poolEmailVersion: v.optional(v.number()),
     }).index("by_key", ["key"]),
   },
   {

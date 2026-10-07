@@ -627,7 +627,15 @@ export default function ReportProblem() {
               onClick={() => {
                 const first = dupCheck?.matches[0];
                 setDupDialogOpen(false);
-                if (first?.id) navigate(`/app/complaints/${first.id}`);
+                if (!first) return;
+                if (first.mine && first.id) {
+                  navigate(`/app/complaints/${first.id}`);
+                } else {
+                  toast.info("That complaint belongs to another student", {
+                    description:
+                      "Its ticket ID, problem and status are shown above — continue below to submit your own report.",
+                  });
+                }
               }}
             >
               View existing complaint

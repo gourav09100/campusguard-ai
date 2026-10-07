@@ -89,7 +89,7 @@ export function ResolutionStats({ stats, compact = false }: { stats: Stats; comp
         <div>
           <p className="text-3xl font-extrabold tracking-tight">{stats.resolutionPct}%</p>
           <p className="text-xs text-muted-foreground">
-            {stats.resolved} of {stats.total} resolved
+            {stats.done} of {stats.total} resolved
           </p>
         </div>
         <div className="text-right text-xs text-muted-foreground">

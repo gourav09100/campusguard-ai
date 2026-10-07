@@ -190,17 +190,24 @@ export const get = query({
   },
 });
 
-/** Lookup by human tracking code (Track Complaint page). */
+/** Lookup by human tracking code (Track Complaint page).
+ *  Same access rule as get(): owner, staff or admin only. */
 export const getByCode = query({
   args: { code: v.string() },
   handler: async (ctx, { code }) => {
-    await requireUser(ctx);
+    const { userId, user } = await requireUser(ctx);
     const normalized = code.trim().toUpperCase();
     const found = await ctx.db
       .query("complaints")
       .withIndex("by_complaint_id", (q) => q.eq("complaintId", normalized))
       .first();
-    return found ?? null;
+    if (!found) return null;
+    const allowed =
+      user.role === "admin" ||
+      user.role === "teacher" ||
+      found.reporterId === userId;
+    if (!allowed) return null;
+    return found;
   },
 });
 
@@ -261,7 +268,7 @@ export const checkDuplicates = query({
     building: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireUser(ctx);
+    const { userId } = await requireUser(ctx);
     type Match = {
       id: string;
       complaintId: string;
@@ -269,6 +276,7 @@ export const checkDuplicates = query({
       status: Doc<"complaints">["status"];
       location: string;
       createdAt: number;
+      mine: boolean;
     };
     const empty = { count: 0, matches: [] as Match[] };
     if (args.title.trim().length < 4 && args.description.trim().length < 12) {
@@ -314,6 +322,7 @@ export const checkDuplicates = query({
         status: hit.status,
         location: [hit.building, hit.floor].filter(Boolean).join(" · "),
         createdAt: doc?.createdAt ?? 0,
+        mine: hit.reporterId === userId,
       });
     }
     return { count, matches: samples };
@@ -339,12 +348,19 @@ export const related = query({
     ) {
       return [];
     }
+    const isStaff = user.role === "admin" || user.role === "teacher";
     const docs = (await ctx.db
       .query("complaints")
       .withIndex("by_created")
       .order("desc")
       .take(300))
-      .filter((c) => !c.mergedInto && c._id !== complaintId);
+      .filter(
+        (c) =>
+          !c.mergedInto &&
+          c._id !== complaintId &&
+          // Students only ever see their own related complaints; staff/admin see all.
+          (isStaff || c.reporterId === userId),
+      );
 
     const candTokens = new Set(
       complaint.title

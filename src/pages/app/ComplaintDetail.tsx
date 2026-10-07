@@ -1146,9 +1146,18 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-white/95 backdrop-blur-xl">
-              {STATUSES.filter((s) => s.id !== "resolved" && s.id !== "closed").map((s) => (
-                <SelectItem key={s.id} value={s.id}>
+              {STATUSES.filter(
+                (s) =>
+                  s.id === complaint.status ||
+                  (s.id !== "resolved" && s.id !== "closed"),
+              ).map((s) => (
+                <SelectItem
+                  key={s.id}
+                  value={s.id}
+                  disabled={s.id === complaint.status}
+                >
                   {s.label}
+                  {s.id === complaint.status ? " (current)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1217,7 +1226,7 @@ function AdminActions({ complaint }: { complaint: Doc<"complaints"> }) {
             <Button
               variant="outline"
               className="glass-soft border-white/80 col-span-2"
-              disabled={busy || isFinalStatus(complaint.status)}
+              disabled={busy || !isFinalStatus(complaint.status)}
               onClick={() =>
                 run(
                   "Reopen",

@@ -253,7 +253,7 @@ export default function Profile() {
             <StatCard label="My complaints" value={stats.total} icon={<School className="size-5" />} />
             <StatCard
               label="Resolved"
-              value={stats.resolved}
+              value={stats.done}
               hint={`${stats.resolutionPct}%`}
               icon={<BadgeCheck className="size-5" />}
               tone="success"

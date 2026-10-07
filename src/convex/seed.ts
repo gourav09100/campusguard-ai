@@ -606,10 +606,12 @@ async function insertComplaint(
     building: spec.building,
     block: spec.block,
     floor: spec.floor,
-    room: spec.room,
-    reporterId,
-    reporterName,
-    photos,
+    room: spec.room,      reporterId,
+      reporterName,
+      // claimRole() hands this pool to the demo student on login — it selects
+      // by reporterEmail, so every seeded complaint must carry it.
+      reporterEmail: DEMO_SEED_EMAIL,
+      photos,
     ai: {
       category: category?.label ?? spec.category,
       subCategory: spec.subCategory,
@@ -734,6 +736,23 @@ export const ensureDemoData = mutation({
           await insertCoverageComplaints(ctx, studentId, Date.now());
           await ctx.db.patch(counter._id, { coverageVersion: 1 });
         }
+      }
+      // One-time repair: older seeds omitted reporterEmail, which claimRole()
+      // uses to hand the demo pool to the student demo account.
+      if ((counter.poolEmailVersion ?? 0) < 1) {
+        const seedUser = await ctx.db
+          .query("users")
+          .withIndex("email", (q) => q.eq("email", DEMO_SEED_EMAIL))
+          .first();
+        if (seedUser) {
+          const complaints = await ctx.db.query("complaints").collect();
+          for (const c of complaints) {
+            if (!c.reporterEmail && c.reporterId === seedUser._id) {
+              await ctx.db.patch(c._id, { reporterEmail: DEMO_SEED_EMAIL });
+            }
+          }
+        }
+        await ctx.db.patch(counter._id, { poolEmailVersion: 1 });
       }
       return { seeded: true, message: "Demo data already loaded" };
     }

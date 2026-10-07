@@ -112,7 +112,7 @@ function AnalyticsInner() {
             <StatCard
               label="Resolution rate"
               value={`${stats.resolutionPct}%`}
-              hint={`${stats.resolved} resolved`}
+              hint={`${stats.done} resolved`}
               icon={<Percent className="size-5" />}
               tone="success"
             />
