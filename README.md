@@ -1,293 +1,203 @@
-## Overview
+# CampusGuard AI
 
-This project uses the following tech stack:
-- Vite
-- Typescript
-- React Router v7 (all imports from `react-router` instead of `react-router-dom`)
-- React 19 (for frontend components)
-- Tailwind v4 (for styling)
-- Shadcn UI (for UI components library)
-- Lucide Icons (for icons)
-- Convex (for backend & database)
-- Convex Auth (for authentication)
-- Framer Motion (for animations)
-- Three js (for 3d models)
+**AI-powered campus complaint management for colleges and universities.**
 
-All relevant files live in the 'src' directory.
+Students report problems in seconds, AI triages and de-duplicates every report, and the admin/staff workspaces drive each ticket from submission to verified resolution — with a full timeline, notifications and analytics for everyone involved.
 
-Use bun for the package manager.
+---
 
-## Setup
+## Problem Statement
 
-This project is set up already and running on a cloud environment, as well as a convex development in the sandbox.
+On most campuses, maintenance and facility complaints travel through WhatsApp groups, phone calls, emails and paper registers. That creates five recurring failures:
 
-## Environment Variables
+1. **No accountability** — nobody owns a complaint, and nobody sees how long it has been open.
+2. **Duplicate noise** — 30 students report the same hostel water leak as 30 separate tickets.
+3. **No visibility** — students never find out what happened to the problem they reported.
+4. **No routing** — reports land in the wrong department and bounce between teams.
+5. **No data** — the administration has no idea which building, department or issue type is worst.
 
-The project is set up with project specific CONVEX_DEPLOYMENT and VITE_CONVEX_URL environment variables on the client side.
+**CampusGuard AI** solves this with one structured workflow: every complaint gets a tracking ID, an AI-generated category/priority/department assignment, duplicate detection against open tickets, a status timeline with proof of resolution, and dashboards that turn the ticket stream into operational insight.
 
-The convex server has a separate set of environment variables that are accessible by the convex backend.
+---
 
-Currently, these variables include auth-specific keys: JWKS, JWT_PRIVATE_KEY, and SITE_URL.
+## Key Features
 
+### Complaint lifecycle
+- **Report a problem** — title, description, photo uploads, and a precise campus location (building → block → floor → room) driven by real floor plans (e.g. HR1 = 4 floors, HR2 = 8 floors).
+- **Tracking ID** — every submission instantly gets an ID like `CG-2026-0001`, trackable by anyone authorised via the Track page.
+- **Six-stage status timeline** — `Submitted → Under Review → Assigned → In Progress → Resolved → Closed`, each transition timestamped and shown on a visual timeline.
+- **Assignment & proof** — admin assigns a department/staff member; staff upload resolution proof; admin verifies and closes (or reopens).
+- **Duplicate detection** — new reports are compared against open tickets before submission.
 
-# Using Authentication (Important!)
+### Roles & security
+- Three role workspaces: **Student**, **Teacher/Staff**, **Admin**.
+- Convex Auth (email OTP) + role-based route protection (`RequireAuth` / `RequireRole`).
+- Server-side authorization on every query/mutation: students only read their own complaints, staff only read assigned tickets, admins read everything. Unclaimed users are sent to profile setup; wrong roles get an "Access restricted" screen.
 
-You must follow these conventions when using authentication.
+### Workspaces
+- **Student dashboard** — status overview, recent complaints, notifications, badges, feedback/rating on resolution.
+- **Staff workspace** — assigned tickets queue, status updates, resolution proofs.
+- **Admin dashboard** — live KPIs (total, pending, in progress, resolved, critical, resolution rate), complaint management, staff assignment, announcements, emergency alerts.
+- **Analytics** — charts for category, building, priority, department, status distribution, hotspots, monthly trend, department performance, satisfaction — all computed from real complaint data.
 
-## Auth is already set up.
+### Campus & communication
+- **Campus map** with building hotspots and zone grouping.
+- **Notifications** — in-app bell with unread counts, click-through to the ticket.
+- **Announcements** and **emergency alerts** published by admin.
+- **Safety** hub and **CampusGuard Assistant** (context-aware help).
+- Seeded with realistic demo complaints across the configured campus buildings.
 
-All convex authentication functions are already set up. The auth currently uses email OTP and anonymous users, but can support more.
+---
 
-The email OTP configuration is defined in `src/convex/auth/emailOtp.ts`. DO NOT MODIFY THIS FILE.
+## AI Features
 
-Also, DO NOT MODIFY THESE AUTH FILES: `src/convex/auth.config.ts` and `src/convex/auth.ts`.
+All AI logic lives in `src/lib/ai.ts` and runs deterministically on-device (**mock mode**). Setting `CAMPUSGUARD_AI_API_KEY` switches the provider flag to `live` for wiring a real model later — no key is required to run or demo the project.
 
-## Using Convex Auth on the backend
+| Feature | What it does |
+|---|---|
+| **Auto-categorisation** | Infers category + sub-category (e.g. `water_leakage → Wall seepage`) from the title/description using keyword scoring over the campus category taxonomy. |
+| **Priority inference** | Rules-based priority (`low / medium / high / critical`) from severity words, location and impact (e.g. fire, security, block-wide outage → Critical). |
+| **Department routing** | Maps the inferred category to one of 10 campus departments (Hostel Maintenance, Electrical, Plumbing, Sanitation, IT & Network, …). |
+| **Summary & suggested action** | Generates a one-line triage summary and the recommended first action with an SLA prefix for urgent tickets. |
+| **Confidence score** | Every analysis returns a confidence value shown in the UI. |
+| **Duplicate detection** | Token-overlap similarity against existing **open** complaints (resolved/closed excluded); surfaces matching ticket IDs in a pre-submit dialog so students can follow the existing ticket instead of creating noise. |
+| **CampusGuard Assistant** | Rule-based assistant (`/app/assistant`) that answers "how do I report…", "what is the status of my complaint", etc., using the signed-in user's real recent complaints as context. |
 
-On the `src/convex/users.ts` file, you can use the `getCurrentUser` function to get the current user's data.
+---
 
-## Using Convex Auth on the frontend
+## Student Workflow
 
-The `/auth` page is already set up to use auth. Navigate to `/auth` for all log in / sign up sequences.
+1. **Sign in** at `/auth` with email OTP — or tap the **Student Demo** button for one-tap access (demo profile: *Aarav Mehta*).
+2. **Set up profile** (`/app/setup`) — name, year, hostel/room.
+3. **Report a problem** (`/app/report`) — enter title & description, attach photos, pick the location (building → block → floor → room).
+4. **AI analysis** appears inline: category, priority, department, summary, suggested action, confidence — plus a **duplicate warning** if similar open tickets exist (view the existing ticket or continue).
+5. **Submit** → receive tracking ID `CG-2026-XXXX` and a success confirmation.
+6. **Track** from the dashboard, **Complaints** list, or the **Track** page (`/app/track`) — live timeline, status changes and staff updates.
+7. **Notifications** keep them informed at every status change, with click-through to the ticket.
+8. **Resolution** — when staff resolve with proof, the student reviews it, **rates** the fix, and the admin closes the ticket.
+9. Reopen/report-a-new-issue is always available from the ticket page.
 
-You MUST use this hook to get user data. Never do this yourself without the hook:
-```typescript
-import { useAuth } from "@/hooks/use-auth";
+## Admin / Staff Workflow
 
-const { isLoading, isAuthenticated, user, signIn, signOut } = useAuth();
+**Admin** (demo: *Dr. Priya Sharma*, setup code `CG-ADMIN-2026`):
+1. **Dashboard** (`/app`) — live KPIs: Total, Pending, In Progress, Resolved, Critical, Resolution rate — all computed from actual complaint state.
+2. **Manage** (`/app/manage`) — review every complaint, **assign department/staff**, change status, verify proof, **Resolve / Close / Reopen**.
+3. **Analytics** (`/app/analytics`) — trend, hotspots, department performance, satisfaction.
+4. **Announcements** & **Safety** — publish campus-wide notices and emergency alerts.
+5. Every action writes to the ticket **timeline** and notifies the student.
+
+**Teacher/Staff** (demo: *Prof. Sneha Rajan*, Electrical Maintenance):
+1. Sees only **assigned** tickets in their workspace.
+2. Moves tickets `Assigned → In Progress → Resolved`, attaching resolution notes/proof.
+3. Cannot access admin-only areas (analytics/manage are admin-gated).
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite 7, React Router v7 |
+| Styling | Tailwind CSS v4, shadcn/ui + Radix UI, Framer Motion, Lucide icons |
+| Charts | Recharts |
+| Forms & validation | React Hook Form + Zod |
+| Backend & database | **Convex** (reactive queries, transactions, file storage) |
+| Authentication | Convex Auth — email OTP, anonymous demo sessions, role claims |
+| AI | Deterministic in-app analysis engine (`src/lib/ai.ts`), live-provider switch |
+| Tooling | Bun, ESLint, Prettier |
+
+---
+
+## How to Run the Project
+
+**Prerequisites:** [Bun](https://bun.sh) installed, and a free [Convex](https://convex.dev) account.
+
+```bash
+# 1. Install dependencies
+bun install
+
+# 2. Configure environment
+cp .env.example .env.local
+#   fill in CONVEX_DEPLOYMENT and VITE_CONVEX_URL
+#   (running `bunx convex dev` the first time creates these for you)
+
+# 3. Start the Convex backend + codegen (keep running, separate terminal)
+bunx convex dev
+
+# 4. Start the frontend dev server (separate terminal)
+bun run dev
 ```
 
-## Protected Routes
+Then open the printed local URL (default `http://localhost:5173`).
 
-The starter `/dashboard` route is protected with `RequireAuth`. Extend that page
-for the product's authenticated experience, and reuse `RequireAuth` when adding
-another protected route — do NOT hand-roll a redirect to `/auth`, since landing
-on a bare sign-in form with no explanation of what was blocked is confusing.
+**Other commands:**
 
-`RequireAuth` states the block on the page the visitor asked for and sends them
-to `/auth?returnTo=<current route>` when they choose to sign in, so they come
-back to it. Pass `title` and `description` to say what the page is:
-
-```tsx
-<Route
-  path="/dashboard"
-  element={
-    <RequireAuth
-      title="Sign in to view your dashboard"
-      description="Your projects and settings live here."
-    >
-      <Dashboard />
-    </RequireAuth>
-  }
-/>
+```bash
+bun run build              # type-check + production build
+bunx tsc -b --noEmit       # type-check only
+bun run lint               # ESLint
+bun run format             # Prettier
+bunx convex dev --once     # one-shot backend deploy + codegen
 ```
 
-Pass `redirectImmediately` for a route where bouncing straight to `/auth` really
-is better.
+**Environment variables** (see `.env.example` — never commit real values):
 
-## Auth Page
+| Variable | Where | Purpose |
+|---|---|---|
+| `VITE_CONVEX_URL` | client | Convex deployment URL |
+| `CONVEX_DEPLOYMENT` | CLI | Deployment used by `bunx convex dev` |
+| `CONVEX_SITE_URL` | client | Site URL for auth redirects |
+| `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL` | Convex backend | Auth signing keys (set in the Convex dashboard) |
+| `VLY_INTEGRATION_KEY` | Convex backend | Optional platform integrations |
+| `CAMPUSGUARD_AI_API_KEY` | runtime | Optional — switches AI to live mode |
 
-The auth page is defined in `src/pages/Auth.tsx`. Send sign-in and sign-up actions
-to `/auth`.
+**Demo logins:** the `/auth` page has one-tap buttons for **Student**, **Teacher/Staff** and **Admin** workspaces. Each seeds realistic demo data (complaints, notifications, announcements) so all three dashboards are instantly full.
 
-## Authorization
+**Roles:** `student`, `teacher` (staff), `admin` — claimed during profile setup (admin requires the setup code `CG-ADMIN-2026` in demo mode).
 
-You can perform authorization checks on the frontend and backend.
+---
 
-On the frontend, you can use the `useAuth` hook to get the current user's data and authentication state.
-
-You should also be protecting queries, mutations, and actions at the base level, checking for authorization securely.
-
-## Adding a redirect after auth
-
-The `/auth` route in `src/main.tsx` redirects to `/dashboard` by default. If the
-product's main authenticated route is different, update `redirectAfterAuth` to
-that route. A validated same-origin `returnTo` query parameter takes priority so
-users can resume the protected page they originally requested. Never leave an
-authenticated product redirecting back to the public landing page.
-
-## Complete authenticated products
-
-When the requested product implies accounts, a workspace, a dashboard, or other
-signed-in functionality, the task is not complete with only a landing page and
-auth form. Build the main authenticated experience, protect its route, and verify
-that signing in reaches it.
-
-# Frontend Conventions
-
-You will be using the Vite frontend with React 19, Tailwind v4, and Shadcn UI.
-
-Generally, pages should be in the `src/pages` folder, and components should be in the `src/components` folder.
-
-Shadcn primitives are located in the `src/components/ui` folder and should be used by default.
-
-## Page routing
-
-Your page component should go under the `src/pages` folder.
-
-When adding a page, update the react router configuration in `src/main.tsx` to include the new route you just added.
-
-## Shad CN conventions
-
-Follow these conventions when using Shad CN components, which you should use by default.
-- Remember to use "cursor-pointer" to make the element clickable
-- For title text, use the "tracking-tight font-bold" class to make the text more readable
-- Always make apps MOBILE RESPONSIVE. This is important
-- AVOID NESTED CARDS. Try and not to nest cards, borders, components, etc. Nested cards add clutter and make the app look messy.
-- AVOID SHADOWS. Avoid adding any shadows to components. stick with a thin border without the shadow.
-- Avoid skeletons; instead, use the loader2 component to show a spinning loading state when loading data.
-
-
-## Landing Pages
-
-You must always create good-looking designer-level styles to your application. 
-- Make it well animated and fit a certain "theme", ie neo brutalist, retro, neumorphism, glass morphism, etc
-
-Use known images and emojis from online.
-
-If the user is logged in already, show the get started button to say "Dashboard" or "Profile" instead to take them there.
-
-## Responsiveness and formatting
-
-Make sure pages are wrapped in a container to prevent the width stretching out on wide screens. Always make sure they are centered aligned and not off-center.
-
-Always make sure that your designs are mobile responsive. Verify the formatting to ensure it has correct max and min widths as well as mobile responsiveness.
-
-- Always create sidebars for protected dashboard pages and navigate between pages
-- Always create navbars for landing pages
-- On these bars, the created logo should be clickable and redirect to the index page
-
-## Animating with Framer Motion
-
-You must add animations to components using Framer Motion. It is already installed and configured in the project.
-
-To use it, import the `motion` component from `framer-motion` and use it to wrap the component you want to animate.
-
-
-### Other Items to animate
-- Fade in and Fade Out
-- Slide in and Slide Out animations
-- Rendering animations
-- Button clicks and UI elements
-
-Animate for all components, including on landing page and app pages.
-
-## Three JS Graphics
-
-Your app comes with three js by default. You can use it to create 3D graphics for landing pages, games, etc.
-
-
-## Colors
-
-You can override colors in: `src/index.css`
-
-This uses the oklch color format for tailwind v4.
-
-Always use these color variable names.
-
-Make sure all ui components are set up to be mobile responsive and compatible with both light and dark mode.
-
-Set theme using `dark` or `light` variables at the parent className.
-
-## Styling and Theming
-
-When changing the theme, always change the underlying theme of the shad cn components app-wide under `src/components/ui` and the colors in the index.css file.
-
-Avoid hardcoding in colors unless necessary for a use case, and properly implement themes through the underlying shad cn ui components.
-
-When styling, ensure buttons and clickable items have pointer-click on them (don't by default).
-
-Always follow a set theme style and ensure it is tuned to the user's liking.
-
-## Toasts
-
-You should always use toasts to display results to the user, such as confirmations, results, errors, etc.
-
-Use the shad cn Sonner component as the toaster. For example:
+## Project Structure
 
 ```
-import { toast } from "sonner"
-
-import { Button } from "@/components/ui/button"
-export function SonnerDemo() {
-  return (
-    <Button
-      variant="outline"
-      onClick={() =>
-        toast("Event has been created", {
-          description: "Sunday, December 03, 2023 at 9:00 AM",
-          action: {
-            label: "Undo",
-            onClick: () => console.log("Undo"),
-          },
-        })
-      }
-    >
-      Show Toast
-    </Button>
-  )
-}
+src/
+├── components/          # AppShell, RequireAuth/RequireRole, campus UI (Badges, Timeline, PhotoUpload…)
+├── convex/              # Schema, complaints, profile, notifications, announcements, emergency, seed, auth
+├── hooks/               # useAuth
+├── lib/                 # ai.ts, campus.ts (buildings/floor plans/departments), stats.ts, demo.ts
+├── pages/
+│   ├── Landing.tsx, Auth.tsx, NotFound.tsx
+│   └── app/             # Dashboard, ReportProblem, Complaints, ComplaintDetail, Track, Analytics,
+│                        # Manage, CampusMap, Safety, Assistant, Announcements, Notifications, Profile, Settings
+└── main.tsx             # routes + providers
 ```
 
-Remember to import { toast } from "sonner". Usage: `toast("Event has been created.")`
+---
 
-## Dialogs
+## What's Committed / Not Committed
 
-Always ensure your larger dialogs have a scroll in its content to ensure that its content fits the screen size. Make sure that the content is not cut off from the screen.
+**Included:** all source code (`src/`), public assets, configuration (`vite.config.ts`, `tsconfig*.json`, `eslint.config.js`, `components.json`, `convex.json`, `postcss.config.cjs`), dependency manifests (`package.json`, `bun.lock`), `.env.example` (placeholders only), and `src/convex/_generated` (regenerated API stubs, so a fresh clone builds without codegen).
 
-Ideally, instead of using a new page, use a Dialog instead. 
+**Excluded via `.gitignore`:** `.env`, `.env.*` (except `.env.example`), `.env.local`, `.env.keys`, `node_modules/`, `dist/`, `.convex/`, logs and editor files.
 
-# Using the Convex backend
+**No secrets are stored in the repository.** Auth keys, deployment URLs and integration tokens live in `.env.local` (git-ignored) and in the Convex dashboard's environment variables.
 
-You will be implementing the convex backend. Follow your knowledge of convex and the documentation to implement the backend.
+---
 
-## The Convex Schema
+## Future Scope
 
-You must correctly follow the convex schema implementation.
+- **Real LLM backend** — swap the deterministic engine for an LLM (already switchable via `CAMPUSGUARD_AI_API_KEY`) for better categorisation, summarisation and assistant conversations.
+- **Vision AI on photos** — auto-detect the issue type/severity from uploaded images.
+- **SLA automation** — auto-escalate tickets that breach their priority-based SLA.
+- **Push / email / SMS notifications** beyond the in-app bell.
+- **Offline-first PWA + mobile app** (React Native) for students on patchy campus networks.
+- **WhatsApp / chatbot intake** — report a complaint straight from a chat message.
+- **Computer-vision campus digital twin** and GIS-based floor plans.
+- **Multi-campus support** with comparative analytics across institutions.
+- **Vendor/contractor module** — assign external workers with proof-of-completion geotags.
 
-The schema is defined in `src/convex/schema.ts`.
+---
 
-Do not include the `_id` and `_creationTime` fields in your queries (it is included by default for each table).
-Do not index `_creationTime` as it is indexed for you. Never have duplicate indexes.
+## License
 
-
-## Convex Actions: Using CRUD operations
-
-When running anything that involves external connections, you must use a convex action with "use node" at the top of the file.
-
-You cannot have queries or mutations in the same file as a "use node" action file. Thus, you must use pre-built queries and mutations in other files.
-
-You can also use the pre-installed internal crud functions for the database:
-
-```ts
-// in convex/users.ts
-import { crud } from "convex-helpers/server/crud";
-import schema from "./schema.ts";
-
-export const { create, read, update, destroy } = crud(schema, "users");
-
-// in some file, in an action:
-const user = await ctx.runQuery(internal.users.read, { id: userId });
-
-await ctx.runMutation(internal.users.update, {
-  id: userId,
-  patch: {
-    status: "inactive",
-  },
-});
-```
-
-
-## Common Convex Mistakes To Avoid
-
-When using convex, make sure:
-- Document IDs are referenced as `_id` field, not `id`.
-- Document ID types are referenced as `Id<"TableName">`, not `string`.
-- Document object types are referenced as `Doc<"TableName">`.
-- Keep schemaValidation to false in the schema file.
-- You must correctly type your code so that it passes the type checker.
-- You must handle null / undefined cases of your convex queries for both frontend and backend, or else it will throw an error that your data could be null or undefined.
-- Always use the `@/folder` path, with `@/convex/folder/file.ts` syntax for importing convex files.
-- This includes importing generated files like `@/convex/_generated/server`, `@/convex/_generated/api`
-- Remember to import functions like useQuery, useMutation, useAction, etc. from `convex/react`
-- NEVER have return type validators.
+Released for educational and demo purposes.

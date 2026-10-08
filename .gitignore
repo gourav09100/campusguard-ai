@@ -1,4 +1,31 @@
-.env.local
+# Dependencies
 node_modules
+
+# Build output
 dist
-src/convex/_generated
+dist-ssr
+.vite
+
+# Environment & secrets — never commit these
+.env
+.env.*
+!.env.example
+.env.local
+.env.keys
+
+# Convex local state
+.convex
+
+# Logs & caches
+*.log
+npm-debug.log*
+.eslintcache
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Note: src/convex/_generated is intentionally committed so a fresh clone
+# type-checks and builds without codegen. Regenerate with: bunx convex dev --once
