@@ -83,7 +83,9 @@ export function RequireRole({
             <Button
               variant="ghost"
               className="w-full"
-              onClick={() => (window.location.href = "/app")}
+              onClick={() =>
+                (window.location.href = `${import.meta.env.BASE_URL}app`)
+              }
             >
               Open my dashboard
             </Button>
